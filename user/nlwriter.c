@@ -46,6 +46,14 @@ int main()
 	dest_addr.nl_pid = 0; /* For Linux Kernel */
 	dest_addr.nl_groups = MYMGRP;
 
+	/*  This removes the need for the remote address to be explicitly
+	 *  checked every time a datagram is received */
+	if (connect(sock_fd,(struct sockaddr *) &dest_addr,
+				sizeof(dest_addr)) == -1) {
+		perror("connect failed\n");
+		return errno;
+	}
+
 	nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
 	memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
 	nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
@@ -53,17 +61,18 @@ int main()
 	nlh->nlmsg_flags = 0;
 
 	printf("Type message to send\n");
-	scanf("%s", (char*) NLMSG_DATA(nlh));
-	//trcpy(NLMSG_DATA(nlh), "Hello World !");
-
-	iov.iov_base = (void *)nlh;
-	iov.iov_len = nlh->nlmsg_len;
-	msg.msg_name = (void *)&dest_addr;
-	msg.msg_namelen = sizeof(dest_addr);
-	msg.msg_iov = &iov;
-	msg.msg_iovlen = 1;
-
-	sendmsg(sock_fd,&msg,0);
-
+	while(1) {
+		scanf("%s", (char*) NLMSG_DATA(nlh));
+		iov.iov_base = (void *)nlh;
+		iov.iov_len = nlh->nlmsg_len;
+		msg.msg_iov = &iov;
+		msg.msg_iovlen = 1;
+		if (sendmsg(sock_fd,&msg,0) == -1) {
+			perror("sendmsg failed");
+			return errno;
+		}
+	}
+	free(nlh);
+	nlh = NULL;
 	close(sock_fd);
 }
