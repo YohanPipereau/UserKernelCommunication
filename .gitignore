@@ -3,5 +3,7 @@
 *.o
 kern/Module.symvers
 kern/modules.order
+kern/.tmp_versions/nlkern.mod
+kern/nlkern.mod.c
 user/nlwriter
 user/nlreader
