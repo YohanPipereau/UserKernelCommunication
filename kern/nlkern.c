@@ -8,6 +8,7 @@
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
 #include <net/netlink.h>
+#include <linux/mutex.h>
 #include <linux/seq_file_net.h>
 
 MODULE_LICENSE("GPL");
@@ -21,35 +22,26 @@ struct sock *nl_sock;
 
 static void recv_message(struct sk_buff *skb)
 {
-	int err;
 	struct sk_buff *skb_out; //data received in socket is represented by SKB
 	struct nlmsghdr *nlheader;
 	int msg_size;
 
-	printk(KERN_INFO "receiving message from uspace\n");
-
 	nlheader = (struct nlmsghdr *)skb->data; //get header from received msg
-	printk(KERN_INFO "Netlink received msg payload:%s\n",
-	                (char *)nlmsg_data(nlheader));
 	msg_size = nlmsg_len(nlheader); //get length of received message
 
 	/*  allocate SKBuffer */
 	skb_out = nlmsg_new(msg_size, 0);
 	if (!skb_out) {
 	        printk(KERN_ERR "SKB mem alloc failed\n");
-	        return;
 	}
 
 	nlheader = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
 	if (!nlheader) {
 	        printk(KERN_ERR "SKB mem insufficient for header\n");
-	        return;
 	}
 
-	err = nlmsg_multicast(nl_sock, skb_out, 0, MYMGRP, GFP_KERNEL);
-	if (err < 0) {
-		printk(KERN_INFO "Multicast failed\n");
-	}
+	/* Testing the output result in kernel outputing too many logs. */
+	nlmsg_multicast(nl_sock, skb_out, 0, MYMGRP, GFP_KERNEL);
 }
 
 static int __init initfn(void)
