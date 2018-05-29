@@ -19,6 +19,7 @@ int main()
 	struct nlmsghdr *nlh = NULL;
 	int group = MYMGRP;
 	int res;
+	int a = 1000000;
 
 	sock_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_USERSOCK);
 	if(sock_fd<0) {
@@ -41,6 +42,11 @@ int main()
         	perror("setsockopt < 0\n");
         	return -1;
     	}
+
+	if (setsockopt(sock_fd, SOL_SOCKET, SO_RCVBUF, &a, sizeof(a)) == -1) {
+		perror("increase buffer failed");
+		return errno;
+	}
 
 	nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
 	memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
