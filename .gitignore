@@ -1,0 +1,7 @@
+*.cmd
+*.ko
+*.o
+kern/Module.symvers
+kern/modules.order
+user/nlwriter
+user/nlreader
