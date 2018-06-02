@@ -37,7 +37,6 @@ int main()
 	memset(&dest_addr, 0, sizeof(dest_addr));
 	dest_addr.nl_family = AF_NETLINK;
 	dest_addr.nl_pid = 0; /* For Linux Kernel */
-	dest_addr.nl_groups = MYMGRP;
 
 	/*  This removes the need for the remote address to be explicitly
 	 *  checked every time a datagram is received */
