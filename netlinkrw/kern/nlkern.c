@@ -37,7 +37,8 @@ static void recv_message(struct sk_buff *skb)
 	}
 
 	/* Link nlha to sbb_out */
-	nlha = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
+	nlha = nlmsg_put(skb_out, nlhr->nlmsg_pid, nlhr->nlmsg_seq,
+			NLMSG_DONE, msg_size, 0);
 	if (!nlha) {
 	        printk(KERN_ERR "SKB mem insufficient for header\n");
 	}

@@ -50,12 +50,12 @@ int main()
 
 	nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
 	memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-	nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
-	nlh->nlmsg_pid = getpid();
-	nlh->nlmsg_flags = 0;
+	//nlh->nlmsg_len = NLMSG_LENGTH(MAX_PAYLOAD);
+	//nlh->nlmsg_pid = getpid();
+	//nlh->nlmsg_flags = 0;
 
 	iov.iov_base = (void *)nlh;
-	iov.iov_len = nlh->nlmsg_len;
+	iov.iov_len = NLMSG_LENGTH(MAX_PAYLOAD);
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1; //1 message in iov
 
@@ -67,8 +67,8 @@ int main()
 			perror("recv failed");
 			return errno;
 		}
-		printf("Received message payload: %s %d\n",
-				(char *)NLMSG_DATA(nlh), res);
+		printf("[pid=%d, seq=%d] %s %d\n", nlh->nlmsg_pid,
+				nlh->nlmsg_seq, (char *)NLMSG_DATA(nlh), res);
 	}
 	close(sock_fd);
 }

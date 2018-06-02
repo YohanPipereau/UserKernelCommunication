@@ -18,6 +18,7 @@ int main()
 	struct sockaddr_nl src_addr, dest_addr;
 	struct nlmsghdr *nlh = NULL;
 	int group = MYMGRP;
+	int seq = 0;
 
 	sock_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_USERSOCK);
 	if(sock_fd<0) {
@@ -56,13 +57,15 @@ int main()
 
 	nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
 	memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-	nlh->nlmsg_len = NLMSG_SPACE(MAX_PAYLOAD);
+	nlh->nlmsg_len = NLMSG_LENGTH(MAX_PAYLOAD);
 	nlh->nlmsg_pid = getpid();
 	nlh->nlmsg_flags = 0;
 
 	printf("Type message to send\n");
 	while(1) {
-		scanf("%s", (char*) NLMSG_DATA(nlh));
+		fgets((char*) NLMSG_DATA(nlh), MAX_PAYLOAD, stdin);
+		nlh->nlmsg_seq = seq;
+		seq ++;
 		iov.iov_base = (void *)nlh;
 		iov.iov_len = nlh->nlmsg_len;
 		msg.msg_iov = &iov;
