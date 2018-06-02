@@ -7,12 +7,12 @@
 #include <errno.h>
 
 #define MAX_PAYLOAD 1024 /* maximum payload size*/
-#define MYMGRP 0x1
+#define MYMGRP 21
 
-struct msghdr msg; //must be global if declared in main -> failed
 
 int main()
 {
+	struct msghdr msg = {0}; //must be initialized to 0
 	int sock_fd;
 	struct iovec iov;
 	struct sockaddr_nl src_addr;
@@ -50,9 +50,6 @@ int main()
 
 	nlh = (struct nlmsghdr *)malloc(NLMSG_SPACE(MAX_PAYLOAD));
 	memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-	//nlh->nlmsg_len = NLMSG_LENGTH(MAX_PAYLOAD);
-	//nlh->nlmsg_pid = getpid();
-	//nlh->nlmsg_flags = 0;
 
 	iov.iov_base = (void *)nlh;
 	iov.iov_len = NLMSG_LENGTH(MAX_PAYLOAD);

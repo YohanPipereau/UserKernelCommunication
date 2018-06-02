@@ -25,7 +25,7 @@ static void recv_message(struct sk_buff *skb)
 	struct sk_buff *skb_out; //SKB data to send
 	struct nlmsghdr *nlhr; //netlink header for received message
 	int msg_size;
-	struct nlmsghdr *nlha;
+	struct nlmsghdr *nlha; //netlink header for answer
 
 	nlhr = (struct nlmsghdr *)skb->data; //get header from received msg
 	msg_size = nlmsg_len(nlhr); //get length of received message
