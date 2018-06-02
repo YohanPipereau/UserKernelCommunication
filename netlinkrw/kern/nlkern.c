@@ -22,12 +22,13 @@ struct sock *nl_sock;
 
 static void recv_message(struct sk_buff *skb)
 {
-	struct sk_buff *skb_out; //data received in socket is represented by SKB
-	struct nlmsghdr *nlheader;
+	struct sk_buff *skb_out; //SKB data to send
+	struct nlmsghdr *nlhr; //netlink header for received message
 	int msg_size;
+	struct nlmsghdr *nlha;
 
-	nlheader = (struct nlmsghdr *)skb->data; //get header from received msg
-	msg_size = nlmsg_len(nlheader); //get length of received message
+	nlhr = (struct nlmsghdr *)skb->data; //get header from received msg
+	msg_size = nlmsg_len(nlhr); //get length of received message
 
 	/*  allocate SKBuffer */
 	skb_out = nlmsg_new(msg_size, 0);
@@ -35,12 +36,18 @@ static void recv_message(struct sk_buff *skb)
 	        printk(KERN_ERR "SKB mem alloc failed\n");
 	}
 
-	nlheader = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
-	if (!nlheader) {
+	/* Link nlha to sbb_out */
+	nlha = nlmsg_put(skb_out, 0, 0, NLMSG_DONE, msg_size, 0);
+	if (!nlha) {
 	        printk(KERN_ERR "SKB mem insufficient for header\n");
 	}
 
-	/* Testing the output result in kernel outputing too many logs. */
+	/*  copy head of message payload of receive message to message to send */
+	strncpy(nlmsg_data(nlha), nlmsg_data(nlhr), msg_size);
+
+	nlmsg_end(skb_out, nlha); //end construction of nl message
+
+	/* free skb_out meanwhile */
 	nlmsg_multicast(nl_sock, skb_out, 0, MYMGRP, GFP_KERNEL);
 }
 
