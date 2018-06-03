@@ -19,7 +19,7 @@ int main()
 	struct nlmsghdr *nlh = NULL;
 	int group = MYMGRP;
 	int res;
-	int a = 1000000;
+	int a = 212992;
 
 	sock_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_USERSOCK);
 	if(sock_fd<0) {
@@ -62,7 +62,8 @@ int main()
 		res = recvmsg(sock_fd, &msg, 0);
 		if (res == -1) {
 			perror("recv failed");
-			return errno;
+			if (errno != ENOBUFS)
+				return errno;
 		}
 		printf("[pid=%d, seq=%d] %s %d\n", nlh->nlmsg_pid,
 				nlh->nlmsg_seq, (char *)NLMSG_DATA(nlh), res);
