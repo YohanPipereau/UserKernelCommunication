@@ -20,17 +20,27 @@ MODULE_DESCRIPTION("Multicast Hello world message !");
 
 struct sock *nl_sock;
 
+
 static void recv_message(struct sk_buff *skb)
 {
 	struct sk_buff *skb_out; //SKB data to send
 	struct nlmsghdr *nlhr; //netlink header for received message
 	int msg_size;
 	struct nlmsghdr *nlha; //netlink header for answer
+	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
+	uint64_t start, end;
 
 	nlhr = (struct nlmsghdr *)skb->data; //get header from received msg
 	msg_size = nlmsg_len(nlhr); //get length of received message
 
-	/*  allocate SKBuffer */
+	/* Start time measurement  */
+	asm volatile ("CPUID\n\t"
+	"RDTSC\n\t"
+	"mov %%edx, %0\n\t"
+	"mov %%eax, %1\n\t": "=r" (cycles_high), "=r" (cycles_low)::
+	"%rax", "%rbx", "%rcx", "%rdx");
+
+	/*  allocate SKBuffer freed in multicast */
 	skb_out = nlmsg_new(msg_size, 0);
 	if (!skb_out) {
 	        printk(KERN_ERR "SKB mem alloc failed\n");
@@ -50,6 +60,17 @@ static void recv_message(struct sk_buff *skb)
 
 	/* free skb_out meanwhile */
 	nlmsg_multicast(nl_sock, skb_out, 0, MYMGRP, GFP_KERNEL);
+
+	/* End time measurement */
+	asm volatile("RDTSCP\n\t"
+	"mov %%edx, %0\n\t"
+	"mov %%eax, %1\n\t"
+	"CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1)::
+	"%rax", "%rbx", "%rcx", "%rdx");
+
+	start = ( ((uint64_t)cycles_high << 32) | cycles_low );
+	end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
+	printk(KERN_INFO "%llu clock cycles\n", (end-start));
 }
 
 static int __init initfn(void)
