@@ -5,10 +5,22 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdint.h>
 
 #define MAX_PAYLOAD 1024 /* maximum payload size*/
 #define MYMGRP 21
 
+#define start_timer() asm volatile ("CPUID\n\t" \
+"RDTSC\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t": "=r" (cycles_high), \
+"=r" (cycles_low):: "%rax", "%rbx", "%rcx", "%rdx");
+
+#define stop_timer() asm volatile("RDTSCP\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t" \
+"CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: \
+"%rax", "%rbx", "%rcx", "%rdx");
 
 int main()
 {
@@ -18,6 +30,9 @@ int main()
 	struct sockaddr_nl src_addr, dest_addr;
 	struct nlmsghdr *nlh = NULL;
 	int seq = 0;
+	int res;
+	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
+	uint64_t start, end;
 
 	sock_fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_USERSOCK);
 	if(sock_fd<0) {
@@ -61,10 +76,16 @@ int main()
 		iov.iov_len = nlh->nlmsg_len;
 		msg.msg_iov = &iov;
 		msg.msg_iovlen = 1;
-		if (sendmsg(sock_fd,&msg,0) == -1) {
+		start_timer();
+		res = sendmsg(sock_fd,&msg,0);
+		stop_timer()
+		if (res == -1) {
 			perror("sendmsg failed");
 			return errno;
 		}
+		start = ( ((uint64_t)cycles_high << 32) | cycles_low );
+		end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
+		printf("sending time %lu \n", end-start);
 	}
 	free(nlh);
 	nlh = NULL;
