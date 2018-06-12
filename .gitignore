@@ -1,9 +1,9 @@
 *.cmd
 *.ko
 *.o
-netlinkrw/kern/Module.symvers
-netlinkrw/kern/modules.order
-netlinkrw/kern/.tmp_versions/nlkern.mod
-netlinkrw/kern/nlkern.mod.c
+*Module.symvers
+*modules.order
+*mod.c
 netlinkrw/user/nlwriter
 netlinkrw/user/nlreader
+netlinkrw/kern/.tmp_versions/nlkern.mod
