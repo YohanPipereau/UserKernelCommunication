@@ -1,13 +1,13 @@
 CC = gcc
 CFLAGS = -O2
-BIN = nlwriter
+BIN = nlreader
 
 all : $(BIN)
 
 %.o: %.c
 	$(CC) -c $<
 
-nlwriter : nlwriter.o
+nlreader: nlreader.o
 	$(CC) -o $@ $^
 
 clean:
