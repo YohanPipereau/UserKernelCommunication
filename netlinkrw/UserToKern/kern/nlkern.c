@@ -23,6 +23,18 @@ MODULE_DESCRIPTION("Netlink : receive message from user process.");
 struct sock *nl_sock;
 unsigned long flags;
 
+#define start_timer() asm volatile ("CPUID\n\t" \
+"RDTSC\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t": "=r" (cycles_high), \
+"=r" (cycles_low):: "%rax", "%rbx", "%rcx", "%rdx");
+
+#define stop_timer() asm volatile("RDTSCP\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t" \
+"CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: \
+"%rax", "%rbx", "%rcx", "%rdx");
+
 static void recv_message(struct sk_buff *skb)
 {
 	struct nlmsghdr *nlhr; //netlink header for received message
