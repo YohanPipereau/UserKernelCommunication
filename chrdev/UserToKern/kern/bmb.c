@@ -148,9 +148,6 @@ bmb_write(struct file *file, const char __user *buffer, size_t count,
 	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
 	uint64_t start, end;
 
-	if (_reader_count == 0)
-		return count;
-
 	if (sizeof(*record) + count <= PAGE_SIZE)
 		record = kmalloc(sizeof(*record) + count, GFP_KERNEL);
 	else
@@ -172,14 +169,7 @@ bmb_write(struct file *file, const char __user *buffer, size_t count,
 
 	down_write(&records_lock);
 	_reader_count = atomic_read(&reader_count);
-	if (_reader_count == 0) {
-		up_write(&records_lock);
-		if (sizeof(*record) + count <= PAGE_SIZE)
-			kfree(record);
-		else
-			vfree(record);
-		return count;
-	}
+
 	for (; _reader_count > 1; _reader_count--)
 		kref_get(&record->kref);
 	list_add_tail(&record->list, records_list);
