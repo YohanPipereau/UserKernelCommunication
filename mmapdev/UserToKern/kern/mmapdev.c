@@ -12,6 +12,7 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/slab.h>
+#include <linux/kthread.h>
 
 /* Start time measurement; CPUID prevent out of order execution */
 #define start_timer() asm volatile ("CPUID\n\t" \
@@ -31,33 +32,29 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yohan Pipereau");
 
 struct sharedm {
-	unsigned long start; //maybe use private_data?
+	unsigned long start;
 };
 
-static int mmdev_release(struct inode *inode, struct file *file)
-{
-	struct sharedm *shm;
+unsigned long flags;
+struct task_struct *task;
 
-	printk(KERN_DEBUG "mmdev : release device\n");
-
-	shm = file->private_data;
-	printk(KERN_INFO "message %s\n", (char *)shm->start);
-	free_page(shm->start);
-	kfree(shm);
-	file->private_data = NULL;
-
-	return 0;
+static bool something_to_read(void) {
+	return 1;
 }
 
-static int mmdev_open(struct inode *inode, struct file *file)
-{
+/*  kthread function reading data in the shared memory */
+static int read_messages(void *data) {
 	struct sharedm *shm;
 
-	printk(KERN_DEBUG "mmdev : open device\n");
+	shm = (struct sharedm *) data;
 
-	shm = kmalloc(sizeof(struct sharedm), GFP_KERNEL);
-	shm->start = get_zeroed_page(GFP_KERNEL);
-	file->private_data = shm;
+	while (!kthread_should_stop()) {
+		if (something_to_read()) {
+			printk(KERN_INFO "mmdev : message %s\n",
+					(char *)shm->start);
+		}
+	}
+
 	return 0;
 }
 
@@ -67,6 +64,9 @@ static void vm_open(struct vm_area_struct *vma) {
 }
 
 static void vm_close(struct vm_area_struct *vma) {
+	struct sharedm *shm;
+
+	shm = vma->vm_private_data;
 	printk(KERN_DEBUG "mmdev : close VMA \n");
 }
 
@@ -100,6 +100,41 @@ static int mmdev_mmap(struct file *file, struct vm_area_struct *vma)
 	vma->vm_flags = VM_WRITE | VM_READ | VM_SHARED;
 	vma->vm_private_data = file->private_data;
 	vm_open(vma);
+
+	/*   create new kthread */
+	task = kthread_create(read_messages, vma->vm_private_data, "readth");
+        if (IS_ERR(task))
+		return PTR_ERR(task);
+        wake_up_process(task);
+
+	return 0;
+}
+
+static int mmdev_release(struct inode *inode, struct file *file)
+{
+	struct sharedm *shm;
+
+	printk(KERN_DEBUG "mmdev : release device\n");
+
+	kthread_stop(task);
+	shm = file->private_data;
+	printk(KERN_INFO "mmdev : message %s\n", (char *)shm->start);
+	free_page(shm->start);
+	kfree(shm);
+	file->private_data = NULL;
+
+	return 0;
+}
+
+static int mmdev_open(struct inode *inode, struct file *file)
+{
+	struct sharedm *shm;
+
+	printk(KERN_DEBUG "mmdev : open device\n");
+
+	shm = kmalloc(sizeof(struct sharedm), GFP_KERNEL);
+	shm->start = get_zeroed_page(GFP_KERNEL);
+	file->private_data = shm;
 	return 0;
 }
 
