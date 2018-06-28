@@ -1,5 +1,6 @@
 /*
- *    Description: This module create a character device handling mmap callback
+ *    Description: This module create a character device which uses different
+ *    shared pages for each process to communicate with kernel land.
  *
  *        Created:  25/06/2018
  *         Author:  Yohan Pipereau
@@ -30,28 +31,32 @@
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yohan Pipereau");
+MODULE_DESCRIPTION("Shared memory between kernel module and user process");
 
 struct sharedm {
 	unsigned long start;
+	struct task_struct *task;
+};
+
+struct record {
+	char msg[1000];
+	int pending;
 };
 
 unsigned long flags;
-struct task_struct *task;
-
-static bool something_to_read(void) {
-	return 1;
-}
 
 /*  kthread function reading data in the shared memory */
 static int read_messages(void *data) {
 	struct sharedm *shm;
+	struct record *rec;
 
 	shm = (struct sharedm *) data;
-
+	rec = (struct record *) shm->start;
 	while (!kthread_should_stop()) {
-		if (something_to_read()) {
-			printk(KERN_INFO "mmdev : message %s\n",
-					(char *)shm->start);
+		if (rec->pending) {
+			rec->pending = 0;
+			printk(KERN_INFO "mmdev : message %s",
+					(char *)rec->msg);
 		}
 	}
 
@@ -59,8 +64,8 @@ static int read_messages(void *data) {
 }
 
 static void vm_open(struct vm_area_struct *vma) {
-	printk(KERN_DEBUG "mmdev : open VMA ; virt %lx, phys %lx\n",
-			vma->vm_start, vma->vm_pgoff << PAGE_SHIFT);
+	printk(KERN_DEBUG "mmdev : open VMA ; virt %lx, phys %llux\n",
+			vma->vm_start, virt_to_phys((void *)vma->vm_start));
 }
 
 static void vm_close(struct vm_area_struct *vma) {
@@ -93,20 +98,26 @@ static struct vm_operations_struct vm_ops = {
 
 static int mmdev_mmap(struct file *file, struct vm_area_struct *vma)
 {
+	struct task_struct *task;
+	struct sharedm *shm;
+
 	printk(KERN_DEBUG "mmdev : mmap attempt from %lx to %lx \n",
 			vma->vm_start, vma->vm_end);
 
+	shm = (struct sharedm *) file->private_data;
 	vma->vm_ops = &vm_ops;
 	vma->vm_flags = VM_WRITE | VM_READ | VM_SHARED;
 	vma->vm_private_data = file->private_data;
 	vm_open(vma);
 
 	/*   create new kthread */
-	task = kthread_create(read_messages, vma->vm_private_data, "readth");
+	task = kthread_create(read_messages, vma->vm_private_data,
+							"readth");
         if (IS_ERR(task))
 		return PTR_ERR(task);
         wake_up_process(task);
 
+	shm->task = task;
 	return 0;
 }
 
@@ -116,9 +127,8 @@ static int mmdev_release(struct inode *inode, struct file *file)
 
 	printk(KERN_DEBUG "mmdev : release device\n");
 
-	kthread_stop(task);
 	shm = file->private_data;
-	printk(KERN_INFO "mmdev : message %s\n", (char *)shm->start);
+	kthread_stop(shm->task);
 	free_page(shm->start);
 	kfree(shm);
 	file->private_data = NULL;
@@ -156,8 +166,8 @@ static void __exit exitfn(void)
 	printk(KERN_INFO "mmdev : quit mmdev\n");
 	misc_deregister(&mmdev_misc);
 
-	raw_local_irq_restore(flags); /* enable hard interrupts on our CPU*/
-	preempt_enable();/* we enable preemption*/
+	//raw_local_irq_restore(flags); /* enable hard interrupts on our CPU*/
+	//preempt_enable();/* we enable preemption*/
 
 	return;
 }
@@ -167,8 +177,8 @@ static int __init initfn(void)
 	printk(KERN_INFO "mmdev : register mmdev\n");
 	misc_register(&mmdev_misc);
 
-	preempt_disable(); // disable preemption on our CPU
-	raw_local_irq_save(flags); // disable hard interrupts on our CPU
+	//preempt_disable(); // disable preemption on our CPU
+	//raw_local_irq_save(flags); // disable hard interrupts on our CPU
 
 	return 0;
 }
