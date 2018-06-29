@@ -16,8 +16,8 @@
 #include <stdint.h>
 
 #define FILENAME "/dev/mmdev"
-#define MAP_LEN 1024
-#define MSG_SIZE 1024
+#define MAP_LEN 4096
+#define MSG_SIZE 1000
 
 /*  Start time measurement; CPUID prevent out of order execution */
 #define start_timer() asm volatile ("CPUID\n\t" \
@@ -33,14 +33,20 @@
 		"CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: \
 		"%rax", "%rbx", "%rcx", "%rdx");
 
+struct record {
+	char msg[MSG_SIZE];
+	int pending;
+};
+
 int main ( int argc, char *argv[] )
 {
 	int fd;
-	char *map;
+	void *map;
 	char buffer[MSG_SIZE];
 	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
 	uint64_t start, end;
 	int seq = 0;
+	struct record *rec;
 
 	fd = open(FILENAME, O_RDWR);
 	if (fd == -1) {
@@ -50,7 +56,13 @@ int main ( int argc, char *argv[] )
 
 	fgets((char*) buffer, MSG_SIZE, stdin);
 	start_timer();
-	map = (char*) mmap(NULL, MAP_LEN, PROT_READ | PROT_WRITE, MAP_SHARED,
+
+	rec = malloc(sizeof(struct record));
+	if (rec == NULL) {
+		printf("malloc failed \n");
+		return EXIT_FAILURE;
+	}
+	map = mmap(NULL, MAP_LEN, PROT_READ | PROT_WRITE, MAP_SHARED,
 			fd, 0);
 	if (map == MAP_FAILED) {
 		close(fd);
@@ -63,8 +75,12 @@ int main ( int argc, char *argv[] )
 		return errno;
 	}
 
-	strcpy(map, buffer);
-	seq++;
+	if (rec->pending == 0) {
+		strcpy(rec->msg, buffer);
+		rec->pending = 1;
+		memcpy(map, rec, sizeof(struct record));
+		seq++;
+	}
 	stop_timer();
 	start = ( ((uint64_t)cycles_high << 32) | cycles_low );
 	end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
@@ -73,8 +89,12 @@ int main ( int argc, char *argv[] )
 	while (1) {
 		fgets((char*) buffer, MSG_SIZE, stdin);
 		start_timer();
-		strcpy(map, buffer);
-		seq++;
+		if (rec->pending == 0) {
+			strcpy(rec->msg, buffer);
+			rec->pending = 1;
+			memcpy(map, rec, sizeof(struct record));
+			seq++;
+		}
 		stop_timer();
 		start = ( ((uint64_t)cycles_high << 32) | cycles_low );
 		end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
@@ -86,6 +106,8 @@ int main ( int argc, char *argv[] )
 	 * https://www.spinics.net/lists/linux-c-programming/msg01027.html
 	 */
 
+	free(rec);
+	rec = NULL;
 	if (munmap(map, MAP_LEN) == -1) {
 		close(fd);
 		perror("failed munmap");
