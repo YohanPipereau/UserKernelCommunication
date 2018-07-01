@@ -41,7 +41,7 @@ struct record {
 int main ( int argc, char *argv[] )
 {
 	int fd;
-	void *map;
+	struct record *map;
 	char buffer[MSG_SIZE];
 	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
 	uint64_t start, end;
@@ -62,8 +62,8 @@ int main ( int argc, char *argv[] )
 		printf("malloc failed \n");
 		return EXIT_FAILURE;
 	}
-	map = mmap(NULL, MAP_LEN, PROT_READ | PROT_WRITE, MAP_SHARED,
-			fd, 0);
+	map = (struct record*) mmap(NULL, MAP_LEN, PROT_READ | PROT_WRITE,
+			MAP_SHARED, fd, 0);
 	if (map == MAP_FAILED) {
 		close(fd);
 		perror("mmap failed");
@@ -75,9 +75,9 @@ int main ( int argc, char *argv[] )
 		return errno;
 	}
 
-	if (rec->pending == 0) {
-		strcpy(rec->msg, buffer);
-		rec->pending = 1;
+	strcpy(rec->msg, buffer);
+	rec->pending = 1;
+	if (map->pending == 0) {
 		memcpy(map, rec, sizeof(struct record));
 		seq++;
 	}
@@ -89,7 +89,7 @@ int main ( int argc, char *argv[] )
 	while (1) {
 		fgets((char*) buffer, MSG_SIZE, stdin);
 		start_timer();
-		if (rec->pending == 0) {
+		if (map->pending == 0) {
 			strcpy(rec->msg, buffer);
 			rec->pending = 1;
 			memcpy(map, rec, sizeof(struct record));

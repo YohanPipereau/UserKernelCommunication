@@ -111,8 +111,7 @@ static int mmdev_mmap(struct file *file, struct vm_area_struct *vma)
 	vm_open(vma);
 
 	/*   create new kthread */
-	task = kthread_create(read_messages, vma->vm_private_data,
-							"readth");
+	task = kthread_create(read_messages, vma->vm_private_data, "readth");
         if (IS_ERR(task))
 		return PTR_ERR(task);
         wake_up_process(task);
@@ -166,9 +165,6 @@ static void __exit exitfn(void)
 	printk(KERN_INFO "mmdev : quit mmdev\n");
 	misc_deregister(&mmdev_misc);
 
-	//raw_local_irq_restore(flags); /* enable hard interrupts on our CPU*/
-	//preempt_enable();/* we enable preemption*/
-
 	return;
 }
 
@@ -176,9 +172,6 @@ static int __init initfn(void)
 {
 	printk(KERN_INFO "mmdev : register mmdev\n");
 	misc_register(&mmdev_misc);
-
-	//preempt_disable(); // disable preemption on our CPU
-	//raw_local_irq_save(flags); // disable hard interrupts on our CPU
 
 	return 0;
 }
