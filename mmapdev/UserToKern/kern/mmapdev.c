@@ -32,25 +32,31 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yohan Pipereau");
 MODULE_DESCRIPTION("Shared memory between kernel module and user process");
+MODULE_VERSION("0.1");
 
-struct sharedm {
+/* iodata represents data useful for every processus to perform I/O
+ * operations on page memory
+ */
+struct iodata {
 	unsigned long start;
 	struct task_struct *task;
 };
 
+/* record represents data copied on the page memory */
 struct record {
 	char msg[1000];
 	int pending;
 };
 
+struct task_struct *check_th;
 unsigned long flags;
 
 /*  kthread function reading data in the shared memory */
 static int read_messages(void *data) {
-	struct sharedm *shm;
+	struct iodata *shm;
 	struct record *rec;
 
-	shm = (struct sharedm *) data;
+	shm = (struct iodata *) data;
 	rec = (struct record *) shm->start;
 	while (!kthread_should_stop()) {
 		if (rec->pending) {
@@ -69,7 +75,7 @@ static void vm_open(struct vm_area_struct *vma) {
 }
 
 static void vm_close(struct vm_area_struct *vma) {
-	struct sharedm *shm;
+	struct iodata *shm;
 
 	shm = vma->vm_private_data;
 	printk(KERN_DEBUG "mmdev : close VMA \n");
@@ -77,7 +83,7 @@ static void vm_close(struct vm_area_struct *vma) {
 
 /*  First access to the page */
 static int vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
-	struct sharedm *shm;
+	struct iodata *shm;
 	struct page *page;
 
 	printk(KERN_DEBUG "mmdev : fault VMA \n");
@@ -99,12 +105,12 @@ static struct vm_operations_struct vm_ops = {
 static int mmdev_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct task_struct *task;
-	struct sharedm *shm;
+	struct iodata *shm;
 
 	printk(KERN_DEBUG "mmdev : mmap attempt from %lx to %lx \n",
 			vma->vm_start, vma->vm_end);
 
-	shm = (struct sharedm *) file->private_data;
+	shm = (struct iodata *) file->private_data;
 	vma->vm_ops = &vm_ops;
 	vma->vm_flags = VM_WRITE | VM_READ | VM_SHARED;
 	vma->vm_private_data = file->private_data;
@@ -122,7 +128,7 @@ static int mmdev_mmap(struct file *file, struct vm_area_struct *vma)
 
 static int mmdev_release(struct inode *inode, struct file *file)
 {
-	struct sharedm *shm;
+	struct iodata *shm;
 
 	printk(KERN_DEBUG "mmdev : release device\n");
 
@@ -137,11 +143,11 @@ static int mmdev_release(struct inode *inode, struct file *file)
 
 static int mmdev_open(struct inode *inode, struct file *file)
 {
-	struct sharedm *shm;
+	struct iodata *shm;
 
 	printk(KERN_DEBUG "mmdev : open device\n");
 
-	shm = kmalloc(sizeof(struct sharedm), GFP_KERNEL);
+	shm = kmalloc(sizeof(struct iodata), GFP_KERNEL);
 	shm->start = get_zeroed_page(GFP_KERNEL);
 	file->private_data = shm;
 	return 0;
@@ -172,6 +178,11 @@ static int __init initfn(void)
 {
 	printk(KERN_INFO "mmdev : register mmdev\n");
 	misc_register(&mmdev_misc);
+
+	//check_th = kthread_create(read_messages, vma->vm_private_data, "readth");
+	//if (IS_ERR(check_th))
+	//	return PTR_ERR(check_th);
+        //wake_up_process(task);
 
 	return 0;
 }
