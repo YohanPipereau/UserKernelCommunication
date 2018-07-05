@@ -16,13 +16,12 @@
 
 #define SUBBUF_SIZE 262144
 #define N_SUBBUFS 4
-#define MSG_SIZE 1000
+#define MSG_SIZE 1024
 
 int main ( int argc, char *argv[] )
 {
 	int nb_proc = get_nprocs();
 	int fd[nb_proc];
-	//char *shm[nb_proc];
 	char *buf[nb_proc];
 	char base[] = "/sys/kernel/debug/relay/relay";
 	char *filename;
@@ -40,11 +39,6 @@ int main ( int argc, char *argv[] )
 			return errno;
 		}
 		buf[i] = malloc(MSG_SIZE);
-		//shm[i] = mmap(NULL, SUBBUF_SIZE*N_SUBBUFS, PROT_READ, MAP_PRIVATE, fd[i], 0);
-		//if (shm[i] == MAP_FAILED) {
-		//	perror("Failed mmaping");
-		//	return errno;
-		//}
 	}
 
 	//#pragma omp parallel
@@ -57,12 +51,6 @@ int main ( int argc, char *argv[] )
 
 	/* Closing */
 	for (int i = 0; i < nb_proc; i++) {
-		//if (munmap(shm[i], SUBBUF_SIZE*N_SUBBUFS) == 0) {
-		//	printf("File relay/relay%d unmapped\n", i);
-		//} else {
-		//	perror("Relay file failed unmapping");
-		//	return errno;
-		//}
 		free(buf[i]);
 		buf[i] = NULL;
 		close(fd[i]);

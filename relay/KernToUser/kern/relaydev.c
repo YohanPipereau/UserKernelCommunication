@@ -12,34 +12,12 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yohan Pipereau");
 
-#define SUBBUF_SIZE 262144
+#define SUBBUF_SIZE 1024
 #define N_SUBBUFS 4
 #define NB_MSG 1000
 
 struct rchan *chan;
 struct dentry *dir;
-
-/*
- * buf_mapped - relay buffer mmap notification
- * @buf: the channel buffer
- * @filp: relay file pointer
- *
- * Called when a relay file is successfully mmapped
- */
-//void buf_map_handler(struct rchan_buf *buf, struct file *filp) {
-//
-//}
-
-/*
- * buf_unmapped - relay buffer unmap notification
- * @buf: the channel buffer
- * @filp: relay file pointer
- *
- * Called when a relay file is successfully unmapped
- */
-//void buf_unmap_handler(struct rchan_buf *buf, struct file *filp) {
-//
-//}
 
 /* create_buf_file callback.  Creates relay file in debugfs. */
 static struct dentry *create_buf_file_handler(const char *filename,
@@ -63,8 +41,6 @@ static int remove_buf_file_handler(struct dentry *dentry)
 /* relay interface callbacks  */
 static struct rchan_callbacks relay_callbacks =
 {
-//        .buf_mapped = buf_map_handler,
-//        .buf_unmapped = buf_unmap_handler,
         .create_buf_file = create_buf_file_handler,
         .remove_buf_file = remove_buf_file_handler,
 };
@@ -92,6 +68,7 @@ static int __init initfn(void)
 	sprintf(buf, "AAAAAAAA");
 	size = strlen(buf);
 	for (; cmpt > 0; cmpt--) {
+		relay_buf_full(
 		relay_write(chan, buf, size);
 	}
 
