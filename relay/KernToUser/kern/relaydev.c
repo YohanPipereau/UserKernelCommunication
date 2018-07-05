@@ -14,12 +14,34 @@ MODULE_AUTHOR("Yohan Pipereau");
 
 #define SUBBUF_SIZE 262144
 #define N_SUBBUFS 4
+#define NB_MSG 1000
 
 struct rchan *chan;
+struct dentry *dir;
 
 /*
- * create_buf_file() callback.  Creates relay file in debugfs.
+ * buf_mapped - relay buffer mmap notification
+ * @buf: the channel buffer
+ * @filp: relay file pointer
+ *
+ * Called when a relay file is successfully mmapped
  */
+//void buf_map_handler(struct rchan_buf *buf, struct file *filp) {
+//
+//}
+
+/*
+ * buf_unmapped - relay buffer unmap notification
+ * @buf: the channel buffer
+ * @filp: relay file pointer
+ *
+ * Called when a relay file is successfully unmapped
+ */
+//void buf_unmap_handler(struct rchan_buf *buf, struct file *filp) {
+//
+//}
+
+/* create_buf_file callback.  Creates relay file in debugfs. */
 static struct dentry *create_buf_file_handler(const char *filename,
                                               struct dentry *parent,
                                               umode_t mode,
@@ -30,9 +52,7 @@ static struct dentry *create_buf_file_handler(const char *filename,
 	                           &relay_file_operations);
 }
 
-/*
- * remove_buf_file() callback.  Removes relay file from debugfs.
- */
+/* remove_buf_file callback.  Removes relay file from debugfs. */
 static int remove_buf_file_handler(struct dentry *dentry)
 {
         debugfs_remove(dentry);
@@ -40,11 +60,11 @@ static int remove_buf_file_handler(struct dentry *dentry)
         return 0;
 }
 
-/*
- * relay interface callbacks
- */
+/* relay interface callbacks  */
 static struct rchan_callbacks relay_callbacks =
 {
+//        .buf_mapped = buf_map_handler,
+//        .buf_unmapped = buf_unmap_handler,
         .create_buf_file = create_buf_file_handler,
         .remove_buf_file = remove_buf_file_handler,
 };
@@ -54,24 +74,26 @@ static int __init initfn(void)
 {
 	int size;
 	char buf[100];
-	struct dentry *dir;
+	int cmpt = NB_MSG;
 
 	dir = debugfs_create_dir("relay", NULL);
 	if (!dir)
 		printk("relay directory creation failed\n");
 	else
-		printk("relay directory created in debugs mount point\n");
+		printk("relay directory created in debugfs mount point\n");
 
 	chan = relay_open("relay", dir, SUBBUF_SIZE, N_SUBBUFS,
 			&relay_callbacks, NULL);
 	if (!chan)
-		printk(KERN_ERR "relay chan creation failed\n");
+		printk(KERN_ERR "relay open failed\n");
 	else
-		printk(KERN_INFO "relay chan created\n");
+		printk(KERN_INFO "relay open success\n");
 
 	sprintf(buf, "AAAAAAAA");
 	size = strlen(buf);
-	relay_write(chan, buf, size);
+	for (; cmpt > 0; cmpt--) {
+		relay_write(chan, buf, size);
+	}
 
 	return 0;
 }
@@ -79,6 +101,8 @@ static int __init initfn(void)
 static void __exit exitfn(void)
 {
 	relay_close(chan);
+
+	debugfs_remove_recursive(dir);
 	printk(KERN_INFO "close relay chan\n");
 }
 
