@@ -4,13 +4,11 @@
 *Module.symvers
 *modules.order
 *mod.c
+.tmp_versions
 netlinkrw/UserToKern/user/nlwriter
 netlinkrw/UserToKern/user/nlreader
-netlinkrw/UserToKern/kern/.tmp_versions/nlkern.mod
 chrdev/UserToKern/user/writewrapper
 netlinkrw/KernToUser/user/nlwriter
 netlinkrw/KernToUser/user/nlreader
-netlinkrw/KernToUser/kern/.tmp_versions/nlkern.mod
 chrdev/KernToUser/user/writewrapper
-mmapdev/UserToKern/kern/.tmp_versions/mmapdev.mod
 mmapdev/UserToKern/user/mmapwrapper
