@@ -54,8 +54,15 @@ static int __init initfn(void)
 {
 	int size;
 	char buf[100];
+	struct dentry *dir;
 
-	chan = relay_open("relay", NULL, SUBBUF_SIZE, N_SUBBUFS,
+	dir = debugfs_create_dir("relay", NULL);
+	if (!dir)
+		printk("relay directory creation failed\n");
+	else
+		printk("relay directory created in debugs mount point\n");
+
+	chan = relay_open("relay", dir, SUBBUF_SIZE, N_SUBBUFS,
 			&relay_callbacks, NULL);
 	if (!chan)
 		printk(KERN_ERR "relay chan creation failed\n");
@@ -63,7 +70,7 @@ static int __init initfn(void)
 		printk(KERN_INFO "relay chan created\n");
 
 	sprintf(buf, "AAAAAAAA");
-	size = 100;
+	size = strlen(buf);
 	relay_write(chan, buf, size);
 
 	return 0;
