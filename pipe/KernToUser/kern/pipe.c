@@ -16,6 +16,8 @@
 #define NB_MSG 100 /* nb of msg sent */
 #define MAXSIZE 4096 /* max size */
 
+#define PAYSIZE 4000
+
 /* struct imported from Lustre project */
 struct msg_hdr {
 	int msglen;
@@ -92,9 +94,9 @@ static ssize_t pipe_write(struct file *filp, const char __user *buf,
 	msg = kzalloc(MAXSIZE, GFP_KERNEL);
 
 	for (; seq < NB_MSG; seq++) {
-		msg->msglen = sizeof(struct msg_hdr) + 4;
+		msg->msglen = sizeof(struct msg_hdr) + PAYSIZE;
 		msg->seq = seq;
-		strcpy(msg_data(msg), "AAAA");
+		memset(msg_data(msg), 'A', PAYSIZE);
 		printk(KERN_DEBUG "msg %s @%p\n", (char*)msg_data(msg), msg_data(msg));
 		msg_put(pipe_file, msg);
 	}
