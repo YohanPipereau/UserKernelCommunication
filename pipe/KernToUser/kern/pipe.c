@@ -10,20 +10,22 @@
 #include <linux/uaccess.h>
 #include <linux/miscdevice.h>
 #include <linux/file.h>
+#include <linux/slab.h>
 
 #define KUC_MAGIC  0x191C /*Lustre9etLinC */
-#define NB_MSG 1000
+#define NB_MSG 100 /* nb of msg sent */
+#define MAXSIZE 4096 /* max size */
 
 /* struct imported from Lustre project */
-struct kuc_hdr {
-	__u16 kuc_magic;
-	__u8  kuc_transport;  /* Each new Lustre feature should use a different
-				 transport */
-	__u8  kuc_flags;
-	__u16 kuc_msgtype;    /* Message type or opcode, transport-specific */
-	__u16 kuc_msglen;     /* Including header */
-} __attribute__((aligned(sizeof(__u64))));
+struct msg_hdr {
+	int msglen;
+	int seq;
+};
 
+static inline void *msg_data(const struct msg_hdr *msg)
+{
+	return (unsigned char*) msg + sizeof(struct msg_hdr);
+}
 
 /* function imported from Lustre project */
 int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
@@ -46,19 +48,13 @@ int cfs_kernel_write(struct file *filp, const void *buf, size_t count,
 /* function imported from Lustre project */
 int msg_put(struct file *filp, void *payload)
 {
-	struct kuc_hdr *kuch = (struct kuc_hdr *)payload;
-	ssize_t count = kuch->kuc_msglen;
+	struct msg_hdr *msg = (struct msg_hdr *)payload;
+	ssize_t count = msg->msglen;
 	loff_t offset = 0;
 	int rc = 0;
 
 	if (IS_ERR_OR_NULL(filp))
 		return -EBADF;
-
-	if (kuch->kuc_magic != KUC_MAGIC) {
-		printk(KERN_ERR "KernelComm: bad magic %x\n",
-				kuch->kuc_magic);
-		return -ENOSYS;
-	}
 
 	while (count > 0) {
 		rc = cfs_kernel_write(filp, payload, count, &offset);
@@ -72,7 +68,7 @@ int msg_put(struct file *filp, void *payload)
 	if (rc < 0)
 		printk(KERN_WARNING "message send failed (%d)\n", rc);
 	else
-		printk(KERN_DEBUG "Message sent rc=%d, fp=%p\n", rc, filp);
+		printk(KERN_DEBUG "Message sent rc=%d, seq=%d\n", rc, msg->seq);
 
 	return rc;
 }
@@ -83,6 +79,7 @@ static ssize_t pipe_write(struct file *filp, const char __user *buf,
 	int fd;
 	int seq = 0;
 	struct file *pipe_file;
+	struct msg_hdr *msg;
 
 	if (copy_from_user(&fd, buf, len) != 0) {
 		return -EFAULT; //Bad Address
@@ -90,11 +87,20 @@ static ssize_t pipe_write(struct file *filp, const char __user *buf,
 
 	printk(KERN_DEBUG "File descriptor : %d\n", fd);
 
-	pipe_file = fget(fd);
+	pipe_file = fget(fd); //cast write pipe fd in struct file*
+
+	msg = kzalloc(MAXSIZE, GFP_KERNEL);
 
 	for (; seq < NB_MSG; seq++) {
-		msg_put(pipe_file, &seq);
+		msg->msglen = sizeof(struct msg_hdr) + 4;
+		msg->seq = seq;
+		strcpy(msg_data(msg), "AAAA");
+		printk(KERN_DEBUG "msg %s @%p\n", (char*)msg_data(msg), msg_data(msg));
+		msg_put(pipe_file, msg);
 	}
+
+	kfree(msg);
+	msg = NULL;
 
 	return len;
 }
@@ -122,6 +128,7 @@ static int __init initfn(void)
 static void __exit exitfn(void)
 {
 	printk(KERN_INFO "pipe : module unregistered\n");
+	misc_deregister(&pipe_device);
 }
 
 module_init(initfn);
