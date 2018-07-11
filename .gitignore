@@ -7,10 +7,10 @@
 .tmp_versions
 netlink_simple/UserToKern/user/nlwriter
 netlink_simple/UserToKern/user/nlreader
-chrdev/UserToKern/user/writewrapper
+rwdev/UserToKern/user/writewrapper
 netlink_simple/KernToUser/user/nlwriter
 netlink_simple/KernToUser/user/nlreader
-chrdev/KernToUser/user/writewrapper
+rwdev/KernToUser/user/writewrapper
 mmapdev/UserToKern/user/mmapwrapper
 relay/KernToUser/user/relaywrapper
 pipe/KernToUser/user/pipeus
