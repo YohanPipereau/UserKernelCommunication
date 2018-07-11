@@ -11,12 +11,27 @@
 #include <linux/miscdevice.h>
 #include <linux/file.h>
 #include <linux/slab.h>
+#include <linux/kthread.h>
 
 #define KUC_MAGIC  0x191C /*Lustre9etLinC */
-#define NB_MSG 100 /* nb of msg sent */
-#define MAXSIZE 4096 /* max size */
+#define NB_MSG 10000 /* nb of msg sent */
+#define MAXSIZE 1024-sizeof(struct msg_hdr) /* max size */
+#define IOCTL_WRITE 0x2121
 
-#define PAYSIZE 4000
+#define start_timer() asm volatile ("CPUID\n\t" \
+"RDTSC\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t": "=r" (cycles_high), \
+"=r" (cycles_low):: "%rax", "%rbx", "%rcx", "%rdx");
+
+#define stop_timer() asm volatile("RDTSCP\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t" \
+"CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: \
+"%rax", "%rbx", "%rcx", "%rdx");
+
+struct file *pipe_file;
+struct task_struct *task;
 
 /* struct imported from Lustre project */
 struct msg_hdr {
@@ -69,46 +84,72 @@ int msg_put(struct file *filp, void *payload)
 
 	if (rc < 0)
 		printk(KERN_WARNING "message send failed (%d)\n", rc);
-	else
-		printk(KERN_DEBUG "Message sent rc=%d, seq=%d\n", rc, msg->seq);
 
 	return rc;
 }
-
-static ssize_t pipe_write(struct file *filp, const char __user *buf,
-		size_t len, loff_t *off)
-{
+static long pipe_unlocked_ioctl(struct file *filp, unsigned int cmd,
+		unsigned long arg) {
 	int fd;
-	int seq = 0;
-	struct file *pipe_file;
-	struct msg_hdr *msg;
 
-	if (copy_from_user(&fd, buf, len) != 0) {
-		return -EFAULT; //Bad Address
+	if (cmd == IOCTL_WRITE) {
+		if (copy_from_user(&fd, (char *) arg, sizeof(int)) != 0) {
+			return -EFAULT; //Bad Address
+		}
+		printk(KERN_DEBUG "File descriptor : %d\n", fd);
+		pipe_file = fget(fd); //cast write pipe fd in struct file*
+	} else {
+		printk(KERN_ERR "wrong ioctl\n");
 	}
 
-	printk(KERN_DEBUG "File descriptor : %d\n", fd);
+	return 0;
+}
 
-	pipe_file = fget(fd); //cast write pipe fd in struct file*
+ssize_t pipe_write(struct file *filep, const char __user *buf, size_t len,
+		loff_t *off) {
+	printk(KERN_DEBUG "write detected \n");
+	wake_up_process(task);
+	return 0;
+}
+
+static int send_messages(void *data)
+{
+	int seq = 0;
+	struct msg_hdr *msg;
+	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
+	uint64_t start, end;
+	char template[MAXSIZE];
+	int cmpt;
+
+	for (cmpt = 0; cmpt < 1000; cmpt++) {
+		template[cmpt] = 'A';
+	}
+	template[cmpt] = '\0';
+
+	printk(KERN_DEBUG "read start\n");
 
 	msg = kzalloc(MAXSIZE, GFP_KERNEL);
 
+	start_timer();
 	for (; seq < NB_MSG; seq++) {
-		msg->msglen = sizeof(struct msg_hdr) + PAYSIZE;
+		msg->msglen = sizeof(struct msg_hdr) + strlen(template);
 		msg->seq = seq;
-		memset(msg_data(msg), 'A', PAYSIZE);
-		printk(KERN_DEBUG "msg %s @%p\n", msg_data(msg), msg_data(msg));
+		strcpy(msg_data(msg), template);
 		msg_put(pipe_file, msg);
 	}
+	stop_timer();
+
+	start = ( ((uint64_t)cycles_high << 32) | cycles_low );
+	end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
+	printk(KERN_INFO "%llu clock cycles\n", (end-start));
 
 	kfree(msg);
 	msg = NULL;
-
-	return len;
+	return 0;
 }
 
 struct file_operations fops = {
 	.owner = THIS_MODULE,
+	.unlocked_ioctl = pipe_unlocked_ioctl,
 	.write = pipe_write,
 };
 
@@ -123,6 +164,10 @@ static int __init initfn(void)
 	printk(KERN_INFO "pipe : module registered\n");
 
 	misc_register(&pipe_device);
+
+	task = kthread_create(send_messages, NULL, "netlink-thread");
+        if (IS_ERR(task))
+                return PTR_ERR(task);
 
 	return 0;
 }

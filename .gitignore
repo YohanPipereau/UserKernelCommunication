@@ -13,3 +13,4 @@ netlinkrw/KernToUser/user/nlreader
 chrdev/KernToUser/user/writewrapper
 mmapdev/UserToKern/user/mmapwrapper
 relay/KernToUser/user/relaywrapper
+pipe/KernToUser/user/pipeus
