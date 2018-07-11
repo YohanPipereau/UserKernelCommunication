@@ -12,9 +12,22 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yohan Pipereau");
 
-#define SUBBUF_SIZE 1024
+#define SUBBUF_SIZE 1024*100
 #define N_SUBBUFS 4
-#define NB_MSG 1000
+#define NB_MSG 100
+#define MSGSIZE 1024
+
+#define start_timer() asm volatile ("CPUID\n\t" \
+"RDTSC\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t": "=r" (cycles_high), \
+"=r" (cycles_low):: "%rax", "%rbx", "%rcx", "%rdx");
+
+#define stop_timer() asm volatile("RDTSCP\n\t" \
+"mov %%edx, %0\n\t" \
+"mov %%eax, %1\n\t" \
+"CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: \
+"%rax", "%rbx", "%rcx", "%rdx");
 
 struct rchan *chan;
 struct dentry *dir;
@@ -49,8 +62,16 @@ static struct rchan_callbacks relay_callbacks =
 static int __init initfn(void)
 {
 	int size;
-	char buf[100];
 	int cmpt = NB_MSG;
+	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
+	uint64_t start, end;
+	char template[MSGSIZE];
+	int i;
+
+	for(i=0; i<NB_MSG-1; i++) {
+		template[i] = 'A';
+	}
+	template[i] = '\0';
 
 	dir = debugfs_create_dir("relay", NULL);
 	if (!dir)
@@ -65,12 +86,17 @@ static int __init initfn(void)
 	else
 		printk(KERN_INFO "relay open success\n");
 
-	sprintf(buf, "AAAAAAAA");
-	size = strlen(buf);
+	size = strlen(template);
+
+	start_timer();
 	for (; cmpt > 0; cmpt--) {
-		relay_buf_full(
-		relay_write(chan, buf, size);
+		relay_write(chan, template, size);
 	}
+	stop_timer();
+
+	start = ( ((uint64_t)cycles_high << 32) | cycles_low );
+	end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
+	printk(KERN_INFO "%llu clock cycles\n", (end-start));
 
 	return 0;
 }

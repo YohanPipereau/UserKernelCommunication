@@ -51,7 +51,8 @@ pipe:
 
 Tests were run on an Intel(R) Core(TM) i5-4210U CPU @ 1.70GHz with 2 core and 2 
 threads per core.
-Results are provided in clock cycles/messages and messages are all 1024 bytes long.
+Results are provided in clock cycles/messages.
+Messages are all 1000 to 1024 bytes long.
 
 User to Kernel :
 ----------------
@@ -72,7 +73,7 @@ Kernel to User:
 | :-------------------- | :-------------: | :----------------: |
 | netlink_simple	| 3 498		  | 3 724	       |
 | netlink_synchro 	| 1 502  	  | 5 601 	       |
-| chrdev 		|		  |		       |
+| chrdev 		| NOT IMPLEMENTED | NOT IMPLEMENTED    |
 | mmapdev		| NOT IMPLEMENTED | NOT IMPLEMENTED    | 
-| relay			|  		  |    		       | 
-| pipe			| 4620		  | 4622 	       | 
+| relay			| 158 		  | 6078   	       | 
+| pipe			| 4 620		  | 4 622 	       | 
