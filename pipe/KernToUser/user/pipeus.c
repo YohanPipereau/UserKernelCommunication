@@ -80,7 +80,7 @@ int main ( int argc, char *argv[] )
 	start_timer();
 	do {
 		/*  Read header */
-		rc = read(pipefd[0], buf, sizeof(struct msg_hdr));
+		rc = read(pipefd[0], buf, 1000+sizeof(struct msg_hdr));
 		if (rc < 0) {
 			perror("read failed");
 			return errno;
@@ -92,13 +92,7 @@ int main ( int argc, char *argv[] )
 		if (msg->msglen > MAXSIZE)
 			return -EMSGSIZE;
 
-		/* Read payload */
-		rc = read(pipefd[0], msg_data(msg),
-				msg->msglen - sizeof(struct msg_hdr));
-		if (rc < 0)
-			return errno;
-
-		printf("[seq=%d] %s\n", msg->seq, msg_data(msg));
+		//printf("[seq=%d] %s\n", msg->seq, msg_data(msg));
 	} while (msg->seq < NB_MSG-1);
 	stop_timer();
 

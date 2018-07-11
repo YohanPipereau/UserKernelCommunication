@@ -11,7 +11,7 @@ Code to test the following environments is provided:
 * Netlink with pre-allocated buffer of fixed size for reception and no resynchronisation (/netlink_simple)
 * A character device module with read/write callback (/chrdev)
 * A character device module with mmap callback (/mmapdev)
-* Relay API (/relay)
+* Relay API with debugfs files (/relay)
 * POSIX pipe IPC (/pipe)
 
 Some mechanism provide two implementations:
@@ -23,6 +23,9 @@ Each implementation has:
 * a user directory containing a binary to communicate with the module.
 
 ## How to run the different test yourself ?
+
+In user land, output can be read in stdout.
+In kernel land, output can be read with 'dmesg'.
 
 netlink_simple:
 ---------------
@@ -68,8 +71,8 @@ Kernel to User:
 |			|  Kernel Sending |   User receiving   |
 | :-------------------- | :-------------: | :----------------: |
 | netlink_simple	| 3 498		  | 3 724	       |
-| netlink_synchro 	| 15 026 	  | 56 015 	       |
+| netlink_synchro 	| 1 502  	  | 5 601 	       |
 | chrdev 		|		  |		       |
 | mmapdev		| NOT IMPLEMENTED | NOT IMPLEMENTED    | 
-| relay			|		  | | 
-| pipe			|		  | | 
+| relay			|  		  |    		       | 
+| pipe			| 4620		  | 4622 	       | 
