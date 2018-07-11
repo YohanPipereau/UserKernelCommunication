@@ -8,7 +8,7 @@ Mechanisms were choosen regardless of how 'dirty' they are considered to be.
 (ex : /pipe).
 
 Code to test the following environments is provided:
-* Netlink with pre-allocated buffer of fixed size for reception (/netlinkrw)
+* Netlink with pre-allocated buffer of fixed size for reception and no resynchronisation (/netlink_simple)
 * A character device module with read/write callback (/chrdev)
 * A character device module with mmap callback (/mmapdev)
 * Relay API (/relay)
@@ -24,7 +24,7 @@ Each implementation has:
 
 ## How to run the different test yourself ?
 
-netlinkrw:
+netlink_simple:
 ----------
 
 chrdev:
@@ -45,7 +45,7 @@ User to Kernel :
 
 |			|  User Sending   |  Kernel receiving  |
 | :-------------------	| :-------------: | :----------------: |
-| netlinkrw		| 15 000	  | NO DATA 	       |
+| netlink_simple	| 15 000	  | NO DATA 	       |
 | chrdev		| 52 405	  | 182		       |
 | mmapdev		|		  |		       | 
 | relay			| NOT POSSIBLE    | NOT POSSIBLE       | 
@@ -56,7 +56,7 @@ Kernel to User:
 
 |			|  Kernel Sending |   User receiving   |
 | :-------------------- | :-------------: | :----------------: |
-| netlinkrw		| 3 498		  | 3 724	       |
+| netlink_simple	| 3 498		  | 3 724	       |
 | chrdev 		|		  |		       |
 | mmapdev		| NOT IMPLEMENTED | NOT IMPLEMENTED    | 
 | relay			|		  | | 

@@ -5,11 +5,11 @@
 *modules.order
 *mod.c
 .tmp_versions
-netlinkrw/UserToKern/user/nlwriter
-netlinkrw/UserToKern/user/nlreader
+netlink_simple/UserToKern/user/nlwriter
+netlink_simple/UserToKern/user/nlreader
 chrdev/UserToKern/user/writewrapper
-netlinkrw/KernToUser/user/nlwriter
-netlinkrw/KernToUser/user/nlreader
+netlink_simple/KernToUser/user/nlwriter
+netlink_simple/KernToUser/user/nlreader
 chrdev/KernToUser/user/writewrapper
 mmapdev/UserToKern/user/mmapwrapper
 relay/KernToUser/user/relaywrapper
