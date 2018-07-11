@@ -24,9 +24,9 @@ struct msg_hdr {
 	int seq;
 };
 
-static inline void *msg_data(const struct msg_hdr *msg)
+static inline char *msg_data(const struct msg_hdr *msg)
 {
-	return (unsigned char*) msg + sizeof(struct msg_hdr);
+	return (char*) msg + sizeof(struct msg_hdr);
 }
 
 /* function imported from Lustre project */
@@ -97,7 +97,7 @@ static ssize_t pipe_write(struct file *filp, const char __user *buf,
 		msg->msglen = sizeof(struct msg_hdr) + PAYSIZE;
 		msg->seq = seq;
 		memset(msg_data(msg), 'A', PAYSIZE);
-		printk(KERN_DEBUG "msg %s @%p\n", (char*)msg_data(msg), msg_data(msg));
+		printk(KERN_DEBUG "msg %s @%p\n", msg_data(msg), msg_data(msg));
 		msg_put(pipe_file, msg);
 	}
 

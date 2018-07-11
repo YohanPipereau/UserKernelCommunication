@@ -22,9 +22,9 @@ struct msg_hdr {
 	int seq;
 };
 
-static inline void *msg_data(const struct msg_hdr *msg)
+static inline char *msg_data(const struct msg_hdr *msg)
 {
-	return (unsigned char*) msg + sizeof(struct msg_hdr);
+	return (char*) msg + sizeof(struct msg_hdr);
 }
 
 int main ( int argc, char *argv[] )
@@ -44,6 +44,7 @@ int main ( int argc, char *argv[] )
 	if (misc_fd < 0)
 		return errno;
 
+	printf("size of msghdr : %d\n", sizeof(struct msg_hdr));
 	rc = write(misc_fd, &pipefd[1], sizeof(int));
 	if (rc < 0)
 		return errno;
@@ -56,6 +57,8 @@ int main ( int argc, char *argv[] )
 
 		msg = (struct msg_hdr*) buf;
 
+		printf("header read\n");
+
 		/* Message can't be bigger than maxsize */
 		if (msg->msglen > MAXSIZE)
 			return -EMSGSIZE;
@@ -66,7 +69,7 @@ int main ( int argc, char *argv[] )
 		if (rc < 0)
 			return errno;
 
-		printf("[seq=%d] %s\n", msg->seq,(char *) msg+sizeof(struct msg_hdr));
+		printf("[seq=%d] %s\n", msg->seq, msg_data(msg));
 	} while (msg->seq < NB_MSG-1);
 
 	close(misc_fd);
