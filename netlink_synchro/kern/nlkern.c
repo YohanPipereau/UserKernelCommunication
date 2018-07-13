@@ -8,8 +8,6 @@
 #include <linux/kernel.h>
 #include <linux/skbuff.h>
 #include <net/netlink.h>
-#include <linux/preempt.h>
-#include <linux/hardirq.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
@@ -24,7 +22,6 @@ MODULE_DESCRIPTION("Netlink : Send message from kernel land to user land.");
 #define MSG_SIZE 1024
 #define NB_MSG 100000
 
-
 #define start_timer() asm volatile ("CPUID\n\t" \
 "RDTSC\n\t" \
 "mov %%edx, %0\n\t" \
@@ -37,35 +34,18 @@ MODULE_DESCRIPTION("Netlink : Send message from kernel land to user land.");
 "CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: \
 "%rax", "%rbx", "%rcx", "%rdx");
 
-struct task_struct *task;
-struct sock *nl_sock;
-/* Determine if kernel carry on sending messages to listeners. */
-
-wait_queue_head_t send_wq;
-DECLARE_WAIT_QUEUE_HEAD(send_wq);
-
-
-/* callback function for message reception. */
-static void recv_message(struct sk_buff *skb)
-{
-	struct nlmsghdr *nlhr; //netlink header for received message
-	int msg_size;
-
-	nlhr = (struct nlmsghdr *)skb->data; //get header from received msg
-	msg_size = nlmsg_len(nlhr); //get length of received message
-}
-
+static struct task_struct *task;
+static struct sock *nl_sock;
 
 /* Thread function sending messages (will die eventually). */
 static int send_messages(void *data)
 {
-	struct sk_buff *skb_out; //SKB data to send
-	struct nlmsghdr *nlha; //netlink header for answer
-	static int seq = 0;
-	int err;
 	unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
+	struct sk_buff *skb; //SKB data to send
+	struct nlmsghdr *nlha; //netlink header for answer
 	uint64_t start, end;
-
+	static int seq = 0;
+	int rc;
 
 	if (!netlink_has_listeners(nl_sock, MYMGRP))
 		do_exit(0);
@@ -73,70 +53,75 @@ static int send_messages(void *data)
 	start_timer();
 	while (seq < NB_MSG) {
 		/*  allocate SKBuffer freed in multicast */
-		skb_out = nlmsg_new(MSG_SIZE, 0);
-		if (!skb_out) {
-			printk(KERN_ERR "nlkern: SKB mem alloc failed\n");
+		skb = nlmsg_new(MSG_SIZE, 0);
+		if (!skb) {
+			printk(KERN_ERR "SKB mem alloc failed\n");
+			return -ENOMEM;
 		}
 
 		/* Link nlha to sbb_out */
-		nlha = nlmsg_put(skb_out, 0, seq,
-				NLMSG_DONE, MSG_SIZE, NLM_F_ACK);
+		nlha = nlmsg_put(skb, 0, seq, NLMSG_DONE, MSG_SIZE, 0);
 		if (!nlha) {
-			printk(KERN_ERR "nlkern: SKB mem insufficient for header\n");
+			printk(KERN_ERR "SKB mem insufficient for header\n");
+			return -ENOMEM;
 		}
 
 		memcpy(nlmsg_data(nlha), &seq, MSG_SIZE);
-		nlmsg_end(skb_out, nlha); //end construction of nl message
+		nlmsg_end(skb, nlha); //end construction of nl message
 
-		/* free skb_out meanwhile */
-		err = nlmsg_multicast(nl_sock, skb_out, 0, MYMGRP, GFP_KERNEL);
-		if (err != 0) {
+		/* free skb meanwhile */
+		rc = nlmsg_multicast(nl_sock, skb, 0, MYMGRP, GFP_KERNEL);
+		if (rc != 0)
 			printk(KERN_ERR "[seq=%d] Sending error %d, waiting\n",
-					seq, err);
-		} else {
+					seq, rc);
+		else
 			seq ++;
-		}
 	}
 	stop_timer();
 
-	start = ( ((uint64_t)cycles_high << 32) | cycles_low );
-	end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
-	printk(KERN_INFO "%llu clock cycles\n", (end-start));
+	start = ((uint64_t)cycles_high << 32) | cycles_low;
+	end = ((uint64_t)cycles_high1 << 32) | cycles_low1;
+	printk(KERN_INFO "%llu clock cycles\n", end-start);
 	do_exit(0);
 }
 
-static int __init initfn(void)
+static int __init nlkern_init(void)
 {
 	struct netlink_kernel_cfg cfg = {
 		.groups = MYMGRP,
-		.input = recv_message,
 		.flags = NL_CFG_F_NONROOT_SEND,
 	};
+	int rc;
 
-	printk(KERN_INFO "nlkern: Register module\n");
+	printk(KERN_INFO "Register module\n");
 
-	/*  create netlink socket */
 	nl_sock = netlink_kernel_create(&init_net, NETLINK_USERSOCK, &cfg);
 	if (!nl_sock) {
-		printk(KERN_ALERT "Error creating socket\n");
-		return -10;
+		printk(KERN_ALERT "error creating socket\n");
+		return -ECHILD;
 	}
 
-	/*  create new kthread */
-	task = kthread_create(send_messages, NULL, "netlink-thread");
-        if (IS_ERR(task))
-                return PTR_ERR(task);
-
+	/* Create the thread that will send messages to the netlink socket */
+	task = kthread_create(send_messages, NULL, "netlink-kproducer");
+        if (IS_ERR(task)) {
+                rc = PTR_ERR(task);
+		goto out_netlink_kernel_release;
+	}
         wake_up_process(task);
+
         return 0;
+
+out_netlink_kernel_release:
+	netlink_kernel_release(nl_sock);
+	return rc;
 }
 
-static void __exit exitfn(void)
+static void __exit nlkern_exit(void)
 {
-	printk(KERN_INFO "nlkern: Quit module\n");
+	printk(KERN_INFO "Quit module\n");
 
 	netlink_kernel_release(nl_sock);
 }
 
-module_init(initfn);
-module_exit(exitfn);
+module_init(nlkern_init);
+module_exit(nlkern_exit);
