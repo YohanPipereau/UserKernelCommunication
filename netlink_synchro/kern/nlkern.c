@@ -52,6 +52,9 @@ static int send_messages(void *data)
 
 	start_timer();
 	while (seq < NB_MSG) {
+		if (kthread_should_stop())
+			goto out_stop_thread;
+
 		/*  allocate SKBuffer freed in multicast */
 		skb = nlmsg_new(MSG_SIZE, 0);
 		if (!skb) {
@@ -71,9 +74,10 @@ static int send_messages(void *data)
 
 		/* free skb meanwhile */
 		rc = nlmsg_multicast(nl_sock, skb, 0, MYMGRP, GFP_KERNEL);
-		if (rc != 0)
-			printk(KERN_ERR "[seq=%d] Sending error %d, waiting\n",
-					seq, rc);
+		if (rc == -ENOBUFS)
+			printk(KERN_ERR "[seq=%d] congestion, waiting\n", seq);
+		else if (rc < 0)
+			goto out_stop_thread;
 		else
 			seq ++;
 	}
@@ -82,6 +86,11 @@ static int send_messages(void *data)
 	start = ((uint64_t)cycles_high << 32) | cycles_low;
 	end = ((uint64_t)cycles_high1 << 32) | cycles_low1;
 	printk(KERN_INFO "%llu clock cycles\n", end-start);
+
+	do_exit(0);
+
+out_stop_thread:
+	printk(KERN_INFO "thread was interrupted\n");
 	do_exit(0);
 }
 
@@ -118,9 +127,12 @@ out_netlink_kernel_release:
 
 static void __exit nlkern_exit(void)
 {
-	printk(KERN_INFO "Quit module\n");
+	if (unlikely(task != NULL))
+		kthread_stop(task);
 
 	netlink_kernel_release(nl_sock);
+
+	printk(KERN_INFO "Quit module\n");
 }
 
 module_init(nlkern_init);
