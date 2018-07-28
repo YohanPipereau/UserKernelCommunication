@@ -229,7 +229,6 @@ static void netlink_bsd_receive(int sock_fd) {
 	end = ( ((uint64_t)cycles_high1 << 32) | cycles_low1 );
 	printf("%lu clock cycles\n", (end-start));
 
-	release_priv_msg(priv_err);
 	release_priv_msg(priv_main);
 }
 
