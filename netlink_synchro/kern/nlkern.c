@@ -36,6 +36,7 @@ MODULE_DESCRIPTION("Netlink : Send message from kernel land to user land.");
 
 static struct task_struct *task;
 static struct sock *nl_sock;
+static unsigned long flags;
 
 /* Thread function sending messages (will die eventually). */
 static int send_messages(void *data)
@@ -52,11 +53,8 @@ static int send_messages(void *data)
 
 	start_timer();
 	while (seq < NB_MSG) {
-		if (kthread_should_stop())
-			goto out_stop_thread;
-
 		/*  allocate SKBuffer freed in multicast */
-		skb = nlmsg_new(MSG_SIZE, 0);
+		skb = nlmsg_new(MSG_SIZE, GFP_KERNEL);
 		if (!skb) {
 			printk(KERN_ERR "SKB mem alloc failed\n");
 			return -ENOMEM;
@@ -69,7 +67,7 @@ static int send_messages(void *data)
 			return -ENOMEM;
 		}
 
-		memcpy(nlmsg_data(nlha), &seq, MSG_SIZE);
+		memcpy(nlmsg_data(nlha), &seq, 4);
 		nlmsg_end(skb, nlha); //end construction of nl message
 
 		/* free skb meanwhile */
@@ -104,10 +102,17 @@ static int __init nlkern_init(void)
 
 	printk(KERN_INFO "Register module\n");
 
+	/* It is important to disable preemption and hard interrupts in order
+	 * for the clock cycle measurements to be accurate.
+	 */
+	preempt_disable();
+	raw_local_irq_save(flags);
+
 	nl_sock = netlink_kernel_create(&init_net, NETLINK_USERSOCK, &cfg);
 	if (!nl_sock) {
 		printk(KERN_ALERT "error creating socket\n");
-		return -ECHILD;
+		rc = -ECHILD;
+		goto out_restore_preemption_and_interrupts;
 	}
 
 	/* Create the thread that will send messages to the netlink socket */
@@ -123,16 +128,20 @@ static int __init nlkern_init(void)
 out_netlink_kernel_release:
 	netlink_kernel_release(nl_sock);
 	return rc;
+out_restore_preemption_and_interrupts:
+	preempt_enable(); /* we enable preemption */
+	raw_local_irq_restore(flags); /* enable hard interrupts on our CPU */
+	return rc;
 }
 
 static void __exit nlkern_exit(void)
 {
-	if (unlikely(task != NULL))
-		kthread_stop(task);
+	printk(KERN_INFO "Quit module\n");
 
 	netlink_kernel_release(nl_sock);
 
-	printk(KERN_INFO "Quit module\n");
+	raw_local_irq_restore(flags);
+	preempt_enable();
 }
 
 module_init(nlkern_init);
