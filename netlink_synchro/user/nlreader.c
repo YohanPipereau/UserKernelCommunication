@@ -10,32 +10,7 @@
 #include <sys/socket.h>
 #include <linux/netlink.h>
 
-#define MAX_PAYLOAD 1024 /* maximum payload size*/
-#define MYMGRP 21
-#define NB_MSG 100000
-
-#ifndef SOL_NETLINK
-	#define SOL_NETLINK 270
-#endif
-
-#define start_timer() asm volatile ("CPUID\n\t" \
-"RDTSC\n\t" \
-"mov %%edx, %0\n\t" \
-"mov %%eax, %1\n\t": "=r" (cycles_high), \
-"=r" (cycles_low):: "%rax", "%rbx", "%rcx", "%rdx");
-
-#define stop_timer() asm volatile("RDTSCP\n\t" \
-"mov %%edx, %0\n\t" \
-"mov %%eax, %1\n\t" \
-"CPUID\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: \
-"%rax", "%rbx", "%rcx", "%rdx");
-
-struct priv_msg {
-	struct msghdr msg;
-	struct nlmsghdr *nlh;
-	struct nlmsgerr *err;
-	struct iovec *iov;
-};
+#include "nlreader.h"
 
 /** Create socket with binding and set multicast opt. */
 static int conn_init()
@@ -138,15 +113,15 @@ free_mem:
 	exit(EXIT_FAILURE);
 }
 
-static struct priv_msg* prepare_sync_msg()
+static struct priv_msg* prepare_msg(__u16 flags)
 {
-	struct priv_msg *priv_sync = NULL;
+	struct priv_msg *priv = NULL;
 	struct nlmsghdr *nlh = NULL;
-	struct iovec *iov = NULL;
 	struct msghdr msg = {0};
+	struct iovec *iov;
 
-	priv_sync = malloc(sizeof(struct priv_msg));
-	if (!priv_sync)
+	priv = malloc(sizeof(struct priv_msg));
+	if (!priv)
 		goto free_mem;
 
 	nlh = malloc(NLMSG_SPACE(MAX_PAYLOAD));
@@ -158,62 +133,24 @@ static struct priv_msg* prepare_sync_msg()
 		goto free_mem;
 
 	memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-	iov->iov_base = (void *)nlh;
+	iov->iov_base = nlh;
 	iov->iov_len = NLMSG_LENGTH(MAX_PAYLOAD);
 	msg.msg_iov = iov;
 	msg.msg_iovlen = 1; //1 message in iov
-	nlh->nlmsg_flags = NLM_F_DUMP | NLM_F_REQUEST;
+	nlh->nlmsg_flags = flags;
 
-	priv_sync->msg = msg;
-	priv_sync->nlh = nlh;
-	priv_sync->err = NULL;
-	priv_sync->iov = iov;
+	priv->msg = msg;
+	priv->nlh = nlh;
+	priv->err = NULL;
+	priv->iov = iov;
 
-	return priv_sync;
+	return priv;
 
 free_mem:
-	free(priv_sync);
+	free(priv);
 	free(nlh);
 	free(iov);
 	exit(EXIT_FAILURE);
-}
-
-static struct priv_msg* prepare_main_msg()
-{
-	struct priv_msg *priv_main = NULL;
-	struct nlmsghdr *nlh = NULL;
-	struct msghdr msg = {0};
-	struct iovec *iov;
-
-	priv_main = malloc(sizeof(struct priv_msg));
-	if (!priv_main)
-		goto free_mem;
-
-	nlh = malloc(NLMSG_SPACE(MAX_PAYLOAD));
-	if (!priv_main)
-		goto free_mem;
-
-	iov = malloc(sizeof(struct iovec));
-	if (!iov)
-		goto free_mem;
-
-	memset(nlh, 0, NLMSG_SPACE(MAX_PAYLOAD));
-	iov->iov_base = (void *)nlh;
-	iov->iov_len = NLMSG_LENGTH(MAX_PAYLOAD);
-	msg.msg_iov = iov;
-	msg.msg_iovlen = 1; //1 message in iov
-
-	priv_main->msg = msg;
-	priv_main->nlh = nlh;
-	priv_main->err = NULL;
-	priv_main->iov = iov;
-
-	return priv_main;
-
-free_mem:
-	free(priv_main);
-	free(nlh);
-	free(iov);
 }
 
 /* Release priv_msg ressources */
@@ -258,8 +195,8 @@ static void netlink_bsd_receive(int sock_fd) {
 	int *data;
 	int rc;
 
-	priv_main = prepare_main_msg();
-	priv_sync = prepare_sync_msg();
+	priv_main = prepare_msg(0);
+	priv_sync = prepare_msg(NLM_F_DUMP | NLM_F_REQUEST);
 
 	/* Receive from kernel */
 	printf("Waiting for message from kernel\n");
