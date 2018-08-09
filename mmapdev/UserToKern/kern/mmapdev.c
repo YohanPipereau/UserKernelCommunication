@@ -34,8 +34,8 @@ MODULE_AUTHOR("Yohan Pipereau");
 MODULE_DESCRIPTION("Shared memory between kernel module and user process");
 MODULE_VERSION("0.1");
 
-/* iodata represents data useful for every processus to perform I/O
- * operations on page memory
+/* Represents data useful for every processus to perform I/O
+ * operations on page memory.
  */
 struct iodata {
 	unsigned long start;
@@ -51,7 +51,9 @@ struct record {
 struct task_struct *check_th;
 unsigned long flags;
 
-/*  kthread function reading data in the shared memory */
+/*  kthread function reading data in the shared memory
+ *  TODO : remove this shit
+ */
 static int read_messages(void *data) {
 	struct iodata *shm;
 	struct record *rec;
@@ -62,31 +64,40 @@ static int read_messages(void *data) {
 		if (rec->pending) {
 			rec->pending = 0;
 			printk(KERN_INFO "mmdev : message %s",
-					(char *)rec->msg);
+			       (char *)rec->msg);
 		}
 	}
 
 	return 0;
 }
 
+/** TODO : What is it?
+ *
+ */
 static void vm_open(struct vm_area_struct *vma) {
 	printk(KERN_DEBUG "mmdev : open VMA ; virt %lx, phys %llux\n",
-			vma->vm_start, virt_to_phys((void *)vma->vm_start));
+	       vma->vm_start, virt_to_phys((void *)vma->vm_start));
 }
 
+/** TODO : What is it?
+ *
+ */
 static void vm_close(struct vm_area_struct *vma) {
 	struct iodata *shm;
 
 	shm = vma->vm_private_data;
-	printk(KERN_DEBUG "mmdev : close VMA \n");
+	printk(KERN_DEBUG "mmdev : close VMA\n");
 }
 
-/*  First access to the page */
+/**  vm_fault - callback for first access to the page.
+ *  @param vma TODO
+ *  @param vmf TODO
+ */
 static int vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
 	struct iodata *shm;
 	struct page *page;
 
-	printk(KERN_DEBUG "mmdev : fault VMA \n");
+	printk(KERN_DEBUG "mmdev : fault VMA\n");
 
 	shm = vma->vm_private_data; //get address of page created at opening
 	page = virt_to_page(shm->start);
@@ -96,19 +107,28 @@ static int vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf) {
 	return 0;
 }
 
-static struct vm_operations_struct vm_ops = {
+struct vm_operations_struct vm_ops = {
 	.close = vm_close,
 	.fault = vm_fault,
 	.open = vm_open,
 };
 
+/** mmdev_mmap - implement mmap callback for the module.
+ * @param file File structure for char device.
+ * @param vma Contains user space desired VMA.
+ */
 static int mmdev_mmap(struct file *file, struct vm_area_struct *vma)
 {
 	struct task_struct *task;
 	struct iodata *shm;
+	size_t size;
 
-	printk(KERN_DEBUG "mmdev : mmap attempt from %lx to %lx \n",
-			vma->vm_start, vma->vm_end);
+	size = vma->vm_end - vma->vm_end;
+
+	printk(KERN_DEBUG "mmdev : mmap from %lx to %lx, size %lx \n",
+	       vma->vm_start, vma->vm_end, size);
+
+	/* TODO : check protection mechanism */
 
 	shm = (struct iodata *) file->private_data;
 	vma->vm_ops = &vm_ops;
@@ -123,6 +143,7 @@ static int mmdev_mmap(struct file *file, struct vm_area_struct *vma)
         wake_up_process(task);
 
 	shm->task = task;
+
 	return 0;
 }
 
@@ -132,6 +153,7 @@ static int mmdev_release(struct inode *inode, struct file *file)
 
 	printk(KERN_DEBUG "mmdev : release device\n");
 
+	/* free page and struct */
 	shm = file->private_data;
 	kthread_stop(shm->task);
 	free_page(shm->start);
@@ -148,8 +170,12 @@ static int mmdev_open(struct inode *inode, struct file *file)
 	printk(KERN_DEBUG "mmdev : open device\n");
 
 	shm = kmalloc(sizeof(struct iodata), GFP_KERNEL);
+	if (!shm)
+		return -ENOMEM;
+
 	shm->start = get_zeroed_page(GFP_KERNEL);
 	file->private_data = shm;
+
 	return 0;
 }
 
@@ -166,26 +192,21 @@ static struct miscdevice mmdev_misc = {
 	.fops	= &mmdev_fops,
 };
 
-static void __exit exitfn(void)
+static void __exit mmdev_exit(void)
 {
 	printk(KERN_INFO "mmdev : quit mmdev\n");
-	misc_deregister(&mmdev_misc);
 
-	return;
+	misc_deregister(&mmdev_misc);
 }
 
-static int __init initfn(void)
+static int __init mmdev_init(void)
 {
 	printk(KERN_INFO "mmdev : register mmdev\n");
-	misc_register(&mmdev_misc);
 
-	//check_th = kthread_create(read_messages, vma->vm_private_data, "readth");
-	//if (IS_ERR(check_th))
-	//	return PTR_ERR(check_th);
-        //wake_up_process(task);
+	misc_register(&mmdev_misc);
 
 	return 0;
 }
 
-module_init(initfn);
-module_exit(exitfn);
+module_init(mmdev_init);
+module_exit(mmdev_exit);
