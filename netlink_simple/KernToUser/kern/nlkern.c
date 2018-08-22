@@ -48,7 +48,7 @@ static int send_messages(void *data)
 
 	/* Send NB_MSG to the netlink socket */
 	for (i = 0; i < NB_MSG; i++) {
-		skb = nlmsg_new(MSG_SIZE, 0);
+		skb = nlmsg_new(MSG_SIZE, GFP_KERNEL);
 		if (!skb) {
 			printk(KERN_ERR "SKB mem alloc failed\n");
 			return -ENOMEM;
@@ -64,6 +64,7 @@ static int send_messages(void *data)
 		}
 
 		/* Include the payload */
+		memset(nlmsg_data(nlha), 0, MSG_SIZE);
 		snprintf(nlmsg_data(nlha), 2, "A");
 
 		/* Conclude the contruction of the message */
