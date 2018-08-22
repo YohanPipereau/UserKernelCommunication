@@ -1,6 +1,7 @@
 *.cmd
 *.ko
 *.o
+*tmp
 *Module.symvers
 *modules.order
 *mod.c
@@ -10,6 +11,8 @@ netlink_simple/UserToKern/user/nlreader
 rwdev/UserToKern/user/writewrapper
 netlink_simple/KernToUser/user/nlwriter
 netlink_simple/KernToUser/user/nlreader
+netlink_synchro/user/nlwriter
+netlink_synchro/user/nlreader
 rwdev/KernToUser/user/writewrapper
 mmapdev/UserToKern/user/mmapwrapper
 relay/KernToUser/user/relaywrapper
