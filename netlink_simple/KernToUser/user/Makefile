@@ -1,14 +1,10 @@
 CC = gcc
-CFLAGS = -O2
+CFLAGS = -O2 -std=gnu99
 BIN = nlreader
 
-all : $(BIN)
+.PHONY: default
 
-%.o: %.c
-	$(CC) -c $<
-
-nlreader: nlreader.o
-	$(CC) -o $@ $^
+default: $(BIN)
 
 clean:
 	rm -rf *.o $(BIN)
