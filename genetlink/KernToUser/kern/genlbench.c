@@ -2,6 +2,7 @@
 #include <net/netlink.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include "genlbench.h"
 
 /*
@@ -47,6 +48,32 @@
  *   openvswitch netlink API
  */
 
+/**
+ * genlbench_stats_transact - Callback function for STATS transactions.
+ * @param skb Incoming Skbuffer.
+ * @param info Information for incoming message.
+ */
+static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+/**
+ * genlbench_ioc_transact - Callback function for IOCTL transactions.
+ * @param skb Incoming Skbuffer.
+ * @param info Information for incoming message.
+ */
+static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
+{
+	return 0;
+}
+
+/** genlbench_hsm_recv - Send back NLMSG_ERROR message to the process. */
+static int genlbench_hsm_recv(struct sk_buff *skb, struct genl_info *info)
+{
+	return -EOPNOTSUPP;
+}
+
 /* attribute policy for STATS */
 static struct nla_policy bench_stats_attr_policy[BENCH_STATS_ATTR_MAX + 1] = {
 	[STATS_TREE]	=	{.type = NLA_BINARY},
@@ -71,12 +98,12 @@ static struct genl_ops bench_genl_ops[] = {
 	{
 		.cmd = BENCH_CMD_STATS,
 		.policy = bench_stats_attr_policy,
-		.doit = genlbench_stats_transact,
+		.doit = genlbench_stats_transact, //mandatory
 	},
 	{
 		.cmd = BENCH_CMD_IOCTL,
 		.policy = bench_ioc_attr_policy,
-		.doit = genlbench_ioc_transact,
+		.doit = genlbench_ioc_transact, //mandatory
 	},
 	{
 		.cmd = BENCH_CMD_HSM,
@@ -90,9 +117,9 @@ static struct genl_family bench_genl_family = {
 	.name = BENCH_GENL_FAMILY_NAME,
 	.version = BENCH_GENL_VERSION,
 	.maxattr = BENCH_MAX_ATTR,
-	.module = THIS_MODULE,
 	.ops = bench_genl_ops,
 	.n_ops = ARRAY_SIZE(bench_genl_ops),
+	.module = THIS_MODULE,
 };
 
 /**
@@ -113,7 +140,7 @@ static int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
 	int size;
 	int rc;
 
-
+	/* allocate space for message */
 	size = 3*nla_attr_size(sizeof(u16)) + 2*nla_attr_size(sizeof(u8));
 	skb = genlmsg_new(nla_total_size(size), GFP_KERNEL);
 	if (skb)
@@ -125,23 +152,23 @@ static int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
 		goto msg_build_fail;
 
 	rc = nla_put_u16(skb, MAGIC, magic);
-	if (rc)
+	if (rc != 0)
 		goto msg_build_fail;
 
 	rc = nla_put_u8(skb, TRANSPORT, transport);
-	if (rc)
+	if (rc != 0)
 		goto msg_build_fail;
 
 	rc = nla_put_u8(skb, FLAGS, flags);
-	if (rc)
+	if (rc != 0)
 		goto msg_build_fail;
 
 	rc = nla_put_u16(skb, MSGTYPE, msgtype);
-	if (rc)
+	if (rc != 0)
 		goto msg_build_fail;
 
 	rc = nla_put_u16(skb, MSGLEN, msglen);
-	if (rc)
+	if (rc != 0)
 		goto msg_build_fail;
 
 	genlmsg_end(skb, msg_head);
@@ -154,19 +181,19 @@ msg_build_fail:
 	return -ENOMEM;
 }
 
-
 static int __init genlbench_init(void)
 {
+	int rc;
+
 	printk(KERN_INFO "genlbench: module loaded\n");
 
-	if (genl_register_family(&bench_genl_family))
-		goto family_register_fail;
+	rc = genl_register_family(&bench_genl_family);
+	if (rc != 0) {
+		printk(KERN_ERR "failed to register bench family\n");
+		return rc;
+	}
 
 	return 0;
-
-family_register_fail:
-	printk(KERN_ERR "failed to register bench family\n");
-	return -EINVAL;
 }
 
 
