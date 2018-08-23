@@ -15,18 +15,47 @@
  * |nlmsghdr|genlmsghdr|nlattr   |         |nlattr   |         |   |
  * +--------+----------+---------+---------+---------+---------+---+
  *
- * Inspired from drivers/block/nbd.c
+ * Openvswitch defines four ways to communicate with netlink:
+ *
+ *   1. Transactions. Similar to syscalls, ioctl or RPC. userspace initiate the
+ * 	request which kernel processes synchronously and reply to userspace.
+ * 	Transactions implement lost cases by repeating a transaction multiple
+ * 	time until it succeed.
+ *
+ *   2. Dumps. A dump asks
+ *
+ *   3. Multicast subscriptions.
+ *
+ *   4. Unicast subscriptions.
+ *
+ * BENCH provides a single family with 3 available commands/attribute policy:
+ *
+ *   1. BENCH_CMD_STATS. Transaction to expose statistics to userspace.
+ *   	The STATS attribute policy uses nested attributes i.e. STATS_TREE
+ *   	attribute contains attributes specified by the developper.
+ *
+ *   2. BENCH_CMD_IOCTL. Transaction to substitute ioctls.
+ *	The IOCTL attribute policy uses REQUEST attribute to detect the type
+ *	of request and ARGS as nested attribute to directly
+ *
+ *   3. BENCH_CMD_HSM. Asynchronous sending from kernel to userland.
+ *	The HSM attribute policy provides attributes required for kernel to
+ *	user space communication between MDC and copytools.
+ *
+ * Inspired from :
+ *   drivers/block/nbd.c
+ *   openvswitch netlink API
  */
 
 /* attribute policy for STATS */
 static struct nla_policy bench_stats_attr_policy[BENCH_STATS_ATTR_MAX + 1] = {
-	[STATS_TREE]	=	{.type = NLA_NESTED},
+	[STATS_TREE]	=	{.type = NLA_BINARY},
 };
 
 /* attribute policy for IOCTL command */
 static struct nla_policy bench_ioc_attr_policy[BENCH_IOC_ATTR_MAX + 1] = {
 	[REQUEST]	=	{.type = NLA_U32},
-	[ARGS]		= 	{.type = NLA_NESTED},
+	[ARGS]		= 	{.type = NLA_BINARY},
 };
 
 /* attribute policy for HSM command */
@@ -42,12 +71,12 @@ static struct genl_ops bench_genl_ops[] = {
 	{
 		.cmd = BENCH_CMD_STATS,
 		.policy = bench_stats_attr_policy,
-		.doit = genlbench_stats_echo,
+		.doit = genlbench_stats_transact,
 	},
 	{
 		.cmd = BENCH_CMD_IOCTL,
 		.policy = bench_ioc_attr_policy,
-		.doit = genlbench_ioc_echo,
+		.doit = genlbench_ioc_transact,
 	},
 	{
 		.cmd = BENCH_CMD_HSM,
@@ -66,6 +95,66 @@ static struct genl_family bench_genl_family = {
 	.n_ops = ARRAY_SIZE(bench_genl_ops),
 };
 
+/**
+ * genlbench_hsm_unicast - Send unicast HSM message to a process.
+ * @param portid destination port ID to send message.
+ * @param magic
+ * @param transport
+ * @param flags
+ * @param msgtype
+ * @param msglen //TODO mandatory?
+ */
+static int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
+				 u16 msgtype, u16 msglen)
+{
+	struct sk_buff *skb;
+	void *msg_head; /* user specific header */
+	static int seq = 0;
+	int size;
+	int rc;
+
+
+	size = 3*nla_attr_size(sizeof(u16)) + 2*nla_attr_size(sizeof(u8));
+	skb = genlmsg_new(nla_total_size(size), GFP_KERNEL);
+	if (skb)
+		return -ENOMEM;
+
+	/* create message */
+	msg_head = genlmsg_put(skb, 0, seq, &bench_genl_family, 0, BENCH_CMD_HSM);
+	if (!msg_head)
+		goto msg_build_fail;
+
+	rc = nla_put_u16(skb, MAGIC, magic);
+	if (rc)
+		goto msg_build_fail;
+
+	rc = nla_put_u8(skb, TRANSPORT, transport);
+	if (rc)
+		goto msg_build_fail;
+
+	rc = nla_put_u8(skb, FLAGS, flags);
+	if (rc)
+		goto msg_build_fail;
+
+	rc = nla_put_u16(skb, MSGTYPE, msgtype);
+	if (rc)
+		goto msg_build_fail;
+
+	rc = nla_put_u16(skb, MSGLEN, msglen);
+	if (rc)
+		goto msg_build_fail;
+
+	genlmsg_end(skb, msg_head);
+
+	/* send message in init_net namespace */
+	return genlmsg_unicast(&init_net, skb, portid);
+
+msg_build_fail:
+	nlmsg_free(skb);
+	return -ENOMEM;
+}
+
+
 static int __init genlbench_init(void)
 {
 	printk(KERN_INFO "genlbench: module loaded\n");
@@ -76,7 +165,7 @@ static int __init genlbench_init(void)
 	return 0;
 
 family_register_fail:
-	printk(KERN_ERR "failed to register bench fammily\n");
+	printk(KERN_ERR "failed to register bench family\n");
 	return -EINVAL;
 }
 
