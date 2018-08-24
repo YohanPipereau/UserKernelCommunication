@@ -3,7 +3,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
-#include "genlbench.h"
+#include "genlbench_internal.h"
 
 /*
  * This implementation is based on generic netlink.
@@ -36,7 +36,7 @@
  *   	attribute contains attributes specified by the developper.
  *
  *   2. BENCH_CMD_IOCTL. Transaction to substitute ioctls.
- *	The IOCTL attribute policy uses REQUEST attribute to detect the type
+ *	The IOCTL attribute policy uses IOC_REQUEST attribute to detect the type
  *	of request and ARGS as nested attribute to directly
  *
  *   3. BENCH_CMD_HSM. Asynchronous sending from kernel to userland.
@@ -73,26 +73,6 @@ static int genlbench_hsm_recv(struct sk_buff *skb, struct genl_info *info)
 {
 	return -EOPNOTSUPP;
 }
-
-/* attribute policy for STATS */
-static struct nla_policy bench_stats_attr_policy[BENCH_STATS_ATTR_MAX + 1] = {
-	[STATS_TREE]	=	{.type = NLA_BINARY},
-};
-
-/* attribute policy for IOCTL command */
-static struct nla_policy bench_ioc_attr_policy[BENCH_IOC_ATTR_MAX + 1] = {
-	[REQUEST]	=	{.type = NLA_U32},
-	[ARGS]		= 	{.type = NLA_BINARY},
-};
-
-/* attribute policy for HSM command */
-static struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
-	[MAGIC]		=	{.type = NLA_U16},
-	[TRANSPORT]	= 	{.type = NLA_U8},
-	[FLAGS]		= 	{.type = NLA_U8},
-	[MSGTYPE]	= 	{.type = NLA_U16},
-	[MSGLEN]	= 	{.type = NLA_U16},
-};
 
 static struct genl_ops bench_genl_ops[] = {
 	{
@@ -137,12 +117,10 @@ static int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
 	struct sk_buff *skb;
 	void *msg_head; /* user specific header */
 	static int seq = 0;
-	int size;
 	int rc;
 
 	/* allocate space for message */
-	size = 3*nla_attr_size(sizeof(u16)) + 2*nla_attr_size(sizeof(u8));
-	skb = genlmsg_new(nla_total_size(size), GFP_KERNEL);
+	skb = genlmsg_new(BENCH_HSM_ATTR_SIZE, GFP_KERNEL);
 	if (skb)
 		return -ENOMEM;
 
@@ -151,23 +129,23 @@ static int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
 	if (!msg_head)
 		goto msg_build_fail;
 
-	rc = nla_put_u16(skb, MAGIC, magic);
+	rc = nla_put_u16(skb, HSM_MAGIC, magic);
 	if (rc != 0)
 		goto msg_build_fail;
 
-	rc = nla_put_u8(skb, TRANSPORT, transport);
+	rc = nla_put_u8(skb, HSM_TRANSPORT, transport);
 	if (rc != 0)
 		goto msg_build_fail;
 
-	rc = nla_put_u8(skb, FLAGS, flags);
+	rc = nla_put_u8(skb, HSM_FLAGS, flags);
 	if (rc != 0)
 		goto msg_build_fail;
 
-	rc = nla_put_u16(skb, MSGTYPE, msgtype);
+	rc = nla_put_u16(skb, HSM_MSGTYPE, msgtype);
 	if (rc != 0)
 		goto msg_build_fail;
 
-	rc = nla_put_u16(skb, MSGLEN, msglen);
+	rc = nla_put_u16(skb, HSM_MSGLEN, msglen);
 	if (rc != 0)
 		goto msg_build_fail;
 

@@ -1,12 +1,13 @@
 CC = gcc
 BIN = benchclient
+PWD = $(shell pwd)
 LDFLAGS = -lnl-3 -lnl-genl-3
-CFLAGS = -I/usr/include/libnl3 -Wall
+CFLAGS = -I/usr/include/libnl3 -I$(PWD)/.. -Wall
 
 all: $(BIN)
 
 clean:
-	rm *.o $(BIN)
+	rm *.o $(BIN) || true
 
 benchclient: benchclient.o
 	$(CC) $^ -o $@ $(LDFLAGS)
