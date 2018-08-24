@@ -9,7 +9,7 @@ all: $(BIN)
 clean:
 	rm *.o $(BIN) || true
 
-benchclient: benchclient.o
+benchclient: benchclient.o benchclient-api.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
 %.o : %.c
