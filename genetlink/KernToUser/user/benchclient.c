@@ -47,37 +47,64 @@ out_failure:
 	return -ENOMEM; //TODO : right error code?
 }
 
-static inline
-void display_error_message(struct nlmsghdr *rhdr, struct nlmsgerr *e, int len)
+static inline void
+display_error_message(struct nlmsghdr *rhdr, struct nlmsgerr *e, int len)
 {
 	fprintf(stderr,"[len=%d,type=%d,flags=%d,seq=%d] %s\n", len,
 		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq,
 	       	strerror(-e->error));
 }
 
-static
-void hsm_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
+static inline void
+stats_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
 {
 	fprintf(stderr,"[len=%d,type=%d,flags=%d,seq=%d] %s\n", len,
 		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq, msg);
 }
 
+static void
+ioc_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
+{
+	struct nlattr *attrs[BENCH_IOC_ATTR_MAX];
+
+	if (nlmsg_parse(rhdr, BENCH_IOC_ATTR_SIZE, (void *)attrs,
+			BENCH_IOC_ATTR_MAX, bench_ioc_attr_policy) < 0) {
+		fprintf(stderr, "parsing failed\n");
+		return;
+	}
+	fprintf(stderr,"[len=%d,type=%d,flags=%d,seq=%d] %s\n", len,
+		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq, msg);
+}
+
+static void
+hsm_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
+{
+	struct nlattr *attrs[BENCH_HSM_ATTR_MAX];
+
+	if (nlmsg_parse(rhdr, BENCH_HSM_ATTR_SIZE, (void *)attrs,
+			BENCH_HSM_ATTR_MAX, bench_hsm_attr_policy) < 0) {
+		fprintf(stderr, "parsing failed\n");
+		return;
+	}
+	fprintf(stderr,"[len=%d,type=%d,flags=%d,seq=%d] %s\n", len,
+		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq, msg);
+}
+
 /**
- * recv_msg - Receive a message.
+ * recv_single_msg - Receive a signle message.
  * @param socket Generic netlink socket.
  */
-int recv_msg(struct nl_sock *socket)
+int recv_single_msg(struct nl_sock *socket)
 {
 	struct sockaddr_nl *nla = NULL;
 	unsigned char *buf = NULL;
 	struct nlmsghdr *rhdr; /* return message header */
+	struct genlmsghdr *genlhdr;
 	struct nlmsgerr *e;
-	struct nlattr *attrs[BENCH_HSM_ATTR_MAX];
 	int rc;
 
 	nla = malloc(sizeof(*nla));
 	if (!nla) {
-		perror("nla alloc failed");
 		rc = errno;
 		goto out_failure;
 	}
@@ -86,39 +113,50 @@ int recv_msg(struct nl_sock *socket)
 	//accordingly.
 	buf = malloc(DEFAULT_MSG_LEN);
 	if (!buf) {
-		perror("buff alloc failed");
 		rc = errno;
 		goto out_failure;
 	}
 
+retry:
 	rc = nl_recv(socket, nla, &buf, NULL);
-	if (rc < 0) {
+	if (rc == -ENOBUFS) //typically return ENOBUF
+		goto retry;
+	else if (rc < 0)
 		goto out_failure;
-	} else if (rc == 0) {
+	else if (rc == 0) {
 		fprintf(stderr, "No more messages\n");
 		goto out;
 	}
 
 	/* A message has been received */
 	rhdr = (struct nlmsghdr *) buf;
+	/* check if msg has been truncated */
+	if (!nlmsg_ok(rhdr, rc)) {
+		rc = -ENOBUFS;
+		goto out_failure;
+	}
 
-	while (nlmsg_ok(rhdr, rc)) {
-		if (rhdr->nlmsg_type == NLMSG_ERROR) {
-			e = nlmsg_data(rhdr);
-			display_error_message(rhdr, e, rc);
-			rhdr = nlmsg_next(rhdr, &rc);
-			continue;
-		}
+	if (rhdr->nlmsg_type == NLMSG_ERROR) {
+		e = nlmsg_data(rhdr);
+		display_error_message(rhdr, e, rc);
+		return rc;
+	}
 
-		rc = nlmsg_parse(rhdr, BENCH_HSM_ATTR_SIZE, (void *)attrs,
-				 BENCH_HSM_ATTR_MAX, bench_hsm_attr_policy);
-		if (rc < 0) {
-			fprintf(stderr, "parsing failed : %s", strerror(rc));
-			rhdr = nlmsg_next(rhdr, &rc);
-			continue;
-		}
-
+	genlhdr = genlmsg_hdr(rhdr);
+	switch(genlhdr->cmd) {
+	case BENCH_CMD_STATS:
+		stats_display_message(rhdr, buf, rc);
+		break;
+	case BENCH_CMD_IOC:
+		ioc_display_message(rhdr, buf, rc);
+		break;
+	case BENCH_CMD_HSM:
 		hsm_display_message(rhdr, buf, rc);
+		break;
+	default:
+		fprintf(stderr, "Unknown message type\n");
+		rc = -EOPNOTSUPP;
+		goto out_failure;
 	}
 
 	free(nla);
@@ -167,7 +205,7 @@ int main()
 	if (rc < 0)
 		return rc;
 
-	rc = recv_msg(socket);
+	rc = recv_single_msg(socket);
 	if (rc < 0)
 		return rc;
 

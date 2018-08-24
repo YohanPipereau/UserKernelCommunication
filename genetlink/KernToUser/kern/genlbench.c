@@ -32,12 +32,11 @@
  * BENCH provides a single family with 3 available commands/attribute policy:
  *
  *   1. BENCH_CMD_STATS. Transaction to expose statistics to userspace.
- *   	The STATS attribute policy uses nested attributes i.e. STATS_TREE
- *   	attribute contains attributes specified by the developper.
+ *	There is no STATS attribute policy. Statistics are copied in payload.
  *
- *   2. BENCH_CMD_IOCTL. Transaction to substitute ioctls.
- *	The IOCTL attribute policy uses IOC_REQUEST attribute to detect the type
- *	of request and ARGS as nested attribute to directly
+ *   2. BENCH_CMD_IOC. Transaction to substitute ioctls.
+ *	The IOC attribute policy uses IOC_REQUEST attribute to detect the type
+ *	of request. Arguments are copied in payload.
  *
  *   3. BENCH_CMD_HSM. Asynchronous sending from kernel to userland.
  *	The HSM attribute policy provides attributes required for kernel to
@@ -59,7 +58,7 @@ static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
 }
 
 /**
- * genlbench_ioc_transact - Callback function for IOCTL transactions.
+ * genlbench_ioc_transact - Callback function for IOC transactions.
  * @param skb Incoming Skbuffer.
  * @param info Information for incoming message.
  */
@@ -77,11 +76,10 @@ static int genlbench_hsm_recv(struct sk_buff *skb, struct genl_info *info)
 static struct genl_ops bench_genl_ops[] = {
 	{
 		.cmd = BENCH_CMD_STATS,
-		.policy = bench_stats_attr_policy,
 		.doit = genlbench_stats_transact, //mandatory
 	},
 	{
-		.cmd = BENCH_CMD_IOCTL,
+		.cmd = BENCH_CMD_IOC,
 		.policy = bench_ioc_attr_policy,
 		.doit = genlbench_ioc_transact, //mandatory
 	},
