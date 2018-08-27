@@ -64,6 +64,29 @@ static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
  */
 static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
 {
+	unsigned int reqc; /* request code */
+
+	/* Get request code */
+	printk(KERN_DEBUG "[len=%d,type=%d,seq=%d]\n",
+	       info->nlhdr->nlmsg_len, info->nlhdr->nlmsg_type, info->snd_seq);
+
+	//TODO : nlmsg_parse failed in kernel why? redo nlmsg_parse ???
+	if (IS_ERR_OR_NULL(info->attrs[IOC_REQUEST])) {
+		printk(KERN_ERR "IOC Request is empty\n");
+		return -EINVAL;
+	}
+
+	reqc = nla_get_u32(info->attrs[BENCH_CMD_IOC]);
+
+	switch(reqc) {
+	case IOC_REQUEST_EXAMPLE:
+		printk(KERN_DEBUG "genlbench: IOC REQUEST received\n");
+		break;
+	default:
+		printk(KERN_ERR "genlbench: Unsupported Request %d\n", reqc);
+		return -EOPNOTSUPP;
+	}
+
 	return 0;
 }
 
@@ -79,16 +102,19 @@ static struct genl_ops bench_genl_ops[] = {
 	{
 		.cmd = BENCH_CMD_STATS,
 		.doit = genlbench_stats_transact, //mandatory
+		.dumpit = NULL, //TODO
 	},
 	{
 		.cmd = BENCH_CMD_IOC,
 		.policy = bench_ioc_attr_policy,
 		.doit = genlbench_ioc_transact, //mandatory
+		.dumpit = NULL, //TODO
 	},
 	{
 		.cmd = BENCH_CMD_HSM,
 		.policy = bench_hsm_attr_policy,
 		.doit = genlbench_hsm_recv,
+		.dumpit = NULL, //TODO
 	},
 };
 
@@ -111,7 +137,7 @@ static struct genl_family bench_genl_family = {
  * @param msgtype
  * @param msglen //TODO mandatory?
  */
-static int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
+int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
 				 u16 msgtype, u16 msglen)
 {
 	struct sk_buff *skb;
@@ -158,6 +184,7 @@ msg_build_fail:
 	nlmsg_free(skb);
 	return -ENOMEM;
 }
+EXPORT_SYMBOL(genlbench_hsm_unicast);
 
 static int __init genlbench_init(void)
 {
