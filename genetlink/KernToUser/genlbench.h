@@ -46,3 +46,7 @@ static struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
 };
 #define BENCH_HSM_ATTR_SIZE 	nla_total_size(3*nla_attr_size(16) \
 					       + 2*nla_attr_size(8))
+
+
+/* define IOC codes here */
+#define IOC_REQUEST_EXAMPLE	0x1

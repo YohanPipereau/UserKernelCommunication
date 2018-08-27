@@ -8,7 +8,75 @@
 
 #include "benchclient_internal.h"
 
+/**
+ * User space API for generic netlink.
+ *
+ * Sending:
+ *   Default behaviour for sending is to send message and wait for an ACK for
+ *   every message sent.
+ *
+ * Receiving:
+ *
+ *
+ */
+
+
 #define DEFAULT_MSG_LEN		1024
+
+/**
+ * ioc_transact - Send a IOC request on a Netlink socket and wait for kernel
+ * response.
+ * @param socket Generic netlink socket.
+ * @param family_id ID of Generic netlink family.
+ * @param payload Data you want to send to the kernel.
+ * @param len Length of the payload provided.
+ */
+int ioc_transact(struct nl_sock *socket, int family_id, void *payload, int len)
+{
+	struct nl_msg *msg;
+	int pad;
+	int rc;
+
+	msg = nlmsg_alloc();
+	if (!msg)
+		return -ENOMEM;
+
+	payload = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id,
+			      0, 0, BENCH_CMD_IOC, BENCH_GENL_VERSION);
+	if (!payload)
+		goto out_send_failure;
+
+	/* Enter IOC Request code */
+	rc = nla_put_u32(msg, IOC_REQUEST, 10);
+	if (rc < 0)
+		goto out_send_failure;
+
+	/* Add payload associated with IOC Request code and padding */
+	pad = nlmsg_padlen(len + BENCH_IOC_ATTR_SIZE);
+	rc = nlmsg_append(msg, payload, len, pad);
+	if (rc < 0)
+		goto out_send_failure;
+
+	rc = nl_send_auto(socket, msg);
+	if (rc < 0)
+		goto out_send_failure;
+
+	//TODO : implement message reception
+	rc = recv_single_msg(socket);
+	if (rc < 0)
+		goto out_recv_failure;
+
+	return rc;
+
+out_send_failure:
+	fprintf(stderr, "fail sending message\n");
+	nlmsg_free(msg);
+	return -ENOMEM; //TODO : right error code?
+
+out_recv_failure:
+	fprintf(stderr, "Error reported on reception : %d\n", rc);
+	return rc;
+}
 
 /**
  * hsm_send_msg - Send an HSM message to trigger NLMSG_ERROR message.
@@ -39,7 +107,7 @@ int hsm_send_msg(struct nl_sock *socket, int family_id)
 	if (rc < 0)
 		goto out_failure;
 
-	return 0;
+	return rc;
 
 out_failure:
 	fprintf(stderr, "fail sending message");
@@ -139,7 +207,7 @@ retry:
 	if (rhdr->nlmsg_type == NLMSG_ERROR) {
 		e = nlmsg_data(rhdr);
 		display_error_message(rhdr, e, rc);
-		return rc;
+		return e->error; //error code
 	}
 
 	genlhdr = genlmsg_hdr(rhdr);

@@ -67,7 +67,9 @@ static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
 	return 0;
 }
 
-/** genlbench_hsm_recv - Send back NLMSG_ERROR message to the process. */
+/** genlbench_hsm_recv - Operation not supported. HSM request must only be
+ * kernel to user space messages. Send back NLMSG_ERROR message to the process.
+ */
 static int genlbench_hsm_recv(struct sk_buff *skb, struct genl_info *info)
 {
 	return -EOPNOTSUPP;
