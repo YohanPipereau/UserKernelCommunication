@@ -34,9 +34,10 @@ static void test2(struct nl_sock *socket, int family_id)
 	struct ioc_example_struct {
 		int	example_int;
 		short	example_short;
-	} ex_struct = { 44, 44};
+	} ex_struct = { 1, 2};
 
-	rc = ioc_transact(socket, family_id, &ex_struct, sizeof(ex_struct));
+	rc = ioc_transact(socket, family_id, IOC_REQUEST_EXAMPLE, &ex_struct,
+			  sizeof(ex_struct));
 	if (rc < 0)
 		return;
 
@@ -64,7 +65,7 @@ int main()
 		return family_id;
 	};
 
-	test1(socket, family_id);
+	//test1(socket, family_id);
 	test2(socket, family_id);
 
 	genl_close_socket(socket);

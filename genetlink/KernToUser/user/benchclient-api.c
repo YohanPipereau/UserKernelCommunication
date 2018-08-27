@@ -16,10 +16,9 @@
  *   every message sent.
  *
  * Receiving:
- *
+ *   We determine which message has been received in recv_single_msg.
  *
  */
-
 
 #define DEFAULT_MSG_LEN		1024
 
@@ -28,15 +27,17 @@
  * response.
  * @param socket Generic netlink socket.
  * @param family_id ID of Generic netlink family.
+ * @param req IOC request code.
  * @param payload Data you want to send to the kernel.
  * @param len Length of the payload provided.
  */
-int ioc_transact(struct nl_sock *socket, int family_id, void *payload, int len)
+int ioc_transact(struct nl_sock *socket, const int family_id,
+		 const unsigned int req, void *payload, int len)
 {
 	struct nl_msg *msg;
-	int pad;
 	int rc;
 
+	//TODO : This allocate PAGESIZE Bytes. Allocate for required length
 	msg = nlmsg_alloc();
 	if (!msg)
 		return -ENOMEM;
@@ -47,21 +48,17 @@ int ioc_transact(struct nl_sock *socket, int family_id, void *payload, int len)
 		goto out_send_failure;
 
 	/* Enter IOC Request code */
-	rc = nla_put_u32(msg, IOC_REQUEST, 10);
+	rc = nla_put_u32(msg, IOC_REQUEST, req);
 	if (rc < 0)
 		goto out_send_failure;
 
-	/* Add payload associated with IOC Request code and padding */
-	pad = nlmsg_padlen(len + BENCH_IOC_ATTR_SIZE);
-	rc = nlmsg_append(msg, payload, len, pad);
-	if (rc < 0)
-		goto out_send_failure;
+	fprintf(stderr, "[len=%d, seq=%d] Sent\n", nlmsg_hdr(msg)->nlmsg_len,
+	       nlmsg_hdr(msg)->nlmsg_seq);
 
 	rc = nl_send_auto(socket, msg);
 	if (rc < 0)
 		goto out_send_failure;
 
-	//TODO : implement message reception
 	rc = recv_single_msg(socket);
 	if (rc < 0)
 		goto out_recv_failure;
@@ -89,6 +86,7 @@ int hsm_send_msg(struct nl_sock *socket, int family_id)
 	void *payload;
 	int rc;
 
+	//TODO : This allocate PAGESIZE Bytes. Allocate for required length
 	msg = nlmsg_alloc();
 	if (!msg)
 		return -ENOMEM;
@@ -159,7 +157,7 @@ hsm_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
 }
 
 /**
- * recv_single_msg - Receive a signle message.
+ * recv_single_msg - Receive a single message.
  * @param socket Generic netlink socket.
  */
 int recv_single_msg(struct nl_sock *socket)
