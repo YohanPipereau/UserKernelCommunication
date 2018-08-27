@@ -47,6 +47,7 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 	if (!payload)
 		goto out_send_failure;
 
+	printf("before nla_put_u32: nlmsg_len %d\n", nlmsg_hdr(msg)->nlmsg_len);
 	/* Enter IOC Request code */
 	rc = nla_put_u32(msg, IOC_REQUEST, req);
 	if (rc < 0)
@@ -54,6 +55,8 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 
 	fprintf(stderr, "[len=%d, seq=%d] Sent\n", nlmsg_hdr(msg)->nlmsg_len,
 	       nlmsg_hdr(msg)->nlmsg_seq);
+
+	printf("after nla_put_u32: nlmsg_len %d\n", nlmsg_hdr(msg)->nlmsg_len);
 
 	rc = nl_send_auto(socket, msg);
 	if (rc < 0)
