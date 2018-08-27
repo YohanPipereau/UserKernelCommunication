@@ -47,6 +47,26 @@
  *   openvswitch netlink API
  */
 
+/* nla_policy structures defer between user space and kernel space */
+
+/* attribute policy for IOC command */
+static const struct nla_policy bench_ioc_attr_policy[BENCH_IOC_ATTR_MAX + 1] = {
+	[IOC_REQUEST]	=	{.type = NLA_U32},
+};
+/* Add padding after IOC_REQUEST to separate from next message */
+#define BENCH_IOC_ATTR_SIZE nla_total_size(nla_attr_size(sizeof(u32)))
+
+/* attribute policy for HSM command */
+static const struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
+	[HSM_MAGIC]		=	{.type = NLA_U16},
+	[HSM_TRANSPORT]		= 	{.type = NLA_U8},
+	[HSM_FLAGS]		= 	{.type = NLA_U8},
+	[HSM_MSGTYPE]		= 	{.type = NLA_U16},
+	[HSM_MSGLEN]		=	{.type = NLA_U16},
+};
+#define BENCH_HSM_ATTR_SIZE nla_total_size(3*nla_attr_size(sizeof(u16)) \
+					   + 2*nla_attr_size(sizeof(u8)))
+
 /**
  * genlbench_stats_transact - Callback function for STATS transactions.
  * @param skb Incoming Skbuffer.
@@ -64,6 +84,27 @@ static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
  */
 static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
 {
+	unsigned int reqc; /* request code */
+
+	/* Get request code */
+	printk(KERN_DEBUG "[len=%d,type=%d,seq=%d]\n",
+	       info->nlhdr->nlmsg_len, info->nlhdr->nlmsg_type, info->snd_seq);
+
+	if (!info->attrs[IOC_REQUEST]) {
+		printk(KERN_ERR "IOC_REQUEST attribute empty\n");
+		return -EINVAL;
+	}
+	reqc = nla_get_u32(info->attrs[BENCH_CMD_IOC]);
+
+	switch(reqc) {
+	case IOC_REQUEST_EXAMPLE:
+		printk(KERN_DEBUG "genlbench: IOC REQUEST received\n");
+		break;
+	default:
+		printk(KERN_ERR "genlbench: Unsupported Request %d\n", reqc);
+		return -EOPNOTSUPP;
+	}
+
 	return 0;
 }
 
@@ -79,19 +120,23 @@ static struct genl_ops bench_genl_ops[] = {
 	{
 		.cmd = BENCH_CMD_STATS,
 		.doit = genlbench_stats_transact, //mandatory
+		.dumpit = NULL, //TODO
 	},
 	{
 		.cmd = BENCH_CMD_IOC,
 		.policy = bench_ioc_attr_policy,
 		.doit = genlbench_ioc_transact, //mandatory
+		.dumpit = NULL, //TODO
 	},
 	{
 		.cmd = BENCH_CMD_HSM,
 		.policy = bench_hsm_attr_policy,
 		.doit = genlbench_hsm_recv,
+		.dumpit = NULL, //TODO
 	},
 };
 
+/* To complete info->attrs, kernel fills internal attrbuf */
 static struct genl_family bench_genl_family = {
 	.hdrsize = 0, /* no family specific header */
 	.name = BENCH_GENL_FAMILY_NAME,
@@ -111,7 +156,7 @@ static struct genl_family bench_genl_family = {
  * @param msgtype
  * @param msglen //TODO mandatory?
  */
-static int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
+int genlbench_hsm_unicast(int portid, u16 magic, u8 transport, u8 flags,
 				 u16 msgtype, u16 msglen)
 {
 	struct sk_buff *skb;
@@ -158,6 +203,7 @@ msg_build_fail:
 	nlmsg_free(skb);
 	return -ENOMEM;
 }
+EXPORT_SYMBOL(genlbench_hsm_unicast);
 
 static int __init genlbench_init(void)
 {

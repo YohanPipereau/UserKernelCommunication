@@ -16,52 +16,66 @@
  *   every message sent.
  *
  * Receiving:
- *
+ *   We determine which message has been received in recv_single_msg.
  *
  */
 
-
 #define DEFAULT_MSG_LEN		1024
+
+/* nla_policy structures defer between user space and kernel space */
+
+/* attribute policy for IOC command */
+static struct nla_policy bench_ioc_attr_policy[BENCH_IOC_ATTR_MAX + 1] = {
+	[IOC_REQUEST]	=	{.type = NLA_U32},
+};
+#define BENCH_IOC_ATTR_SIZE nla_total_size(nla_attr_size(sizeof(uint32_t)))
+
+/* attribute policy for HSM command */
+static struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
+	[HSM_MAGIC]		=	{.type = NLA_U16},
+	[HSM_TRANSPORT]		= 	{.type = NLA_U8},
+	[HSM_FLAGS]		= 	{.type = NLA_U8},
+	[HSM_MSGTYPE]		= 	{.type = NLA_U16},
+	[HSM_MSGLEN]		=	{.type = NLA_U16},
+};
+#define BENCH_HSM_ATTR_SIZE nla_total_size(3*nla_attr_size(sizeof(uint16_t)) \
+					   + 2*nla_attr_size(sizeof(uint8_t)))
 
 /**
  * ioc_transact - Send a IOC request on a Netlink socket and wait for kernel
  * response.
  * @param socket Generic netlink socket.
  * @param family_id ID of Generic netlink family.
+ * @param req IOC request code.
  * @param payload Data you want to send to the kernel.
  * @param len Length of the payload provided.
  */
-int ioc_transact(struct nl_sock *socket, int family_id, void *payload, int len)
+int ioc_transact(struct nl_sock *socket, const int family_id,
+		 const unsigned int req, void *payload, int len)
 {
 	struct nl_msg *msg;
-	int pad;
 	int rc;
 
+	//TODO : This allocate PAGESIZE Bytes. Allocate for required length
 	msg = nlmsg_alloc();
 	if (!msg)
 		return -ENOMEM;
 
-	payload = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id,
+	genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id,
 			      0, 0, BENCH_CMD_IOC, BENCH_GENL_VERSION);
-	if (!payload)
-		goto out_send_failure;
 
 	/* Enter IOC Request code */
-	rc = nla_put_u32(msg, IOC_REQUEST, 10);
+	rc = nla_put_u32(msg, IOC_REQUEST, req);
 	if (rc < 0)
 		goto out_send_failure;
 
-	/* Add payload associated with IOC Request code and padding */
-	pad = nlmsg_padlen(len + BENCH_IOC_ATTR_SIZE);
-	rc = nlmsg_append(msg, payload, len, pad);
-	if (rc < 0)
-		goto out_send_failure;
+	fprintf(stderr, "[len=%d, seq=%d] Sent\n", nlmsg_hdr(msg)->nlmsg_len,
+	       nlmsg_hdr(msg)->nlmsg_seq);
 
 	rc = nl_send_auto(socket, msg);
 	if (rc < 0)
 		goto out_send_failure;
 
-	//TODO : implement message reception
 	rc = recv_single_msg(socket);
 	if (rc < 0)
 		goto out_recv_failure;
@@ -89,6 +103,7 @@ int hsm_send_msg(struct nl_sock *socket, int family_id)
 	void *payload;
 	int rc;
 
+	//TODO : This allocate PAGESIZE Bytes. Allocate for required length
 	msg = nlmsg_alloc();
 	if (!msg)
 		return -ENOMEM;
@@ -135,13 +150,21 @@ ioc_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
 {
 	struct nlattr *attrs[BENCH_IOC_ATTR_MAX];
 
-	if (nlmsg_parse(rhdr, BENCH_IOC_ATTR_SIZE, (void *)attrs,
-			BENCH_IOC_ATTR_MAX, bench_ioc_attr_policy) < 0) {
-		fprintf(stderr, "parsing failed\n");
+	attrs[IOC_REQUEST] = malloc(sizeof(struct nlattr));
+	if (!attrs[IOC_REQUEST])
 		return;
+
+	if (genlmsg_parse(rhdr, 0, (void *)attrs, BENCH_IOC_ATTR_MAX,
+			  bench_ioc_attr_policy) < 0) {
+		fprintf(stderr, "parsing failed\n");
+		goto out;
 	}
 	fprintf(stderr,"[len=%d,type=%d,flags=%d,seq=%d] %s\n", len,
 		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq, msg);
+
+out:
+	free(attrs[IOC_REQUEST]);
+	return;
 }
 
 static void
@@ -149,8 +172,8 @@ hsm_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
 {
 	struct nlattr *attrs[BENCH_HSM_ATTR_MAX];
 
-	if (nlmsg_parse(rhdr, BENCH_HSM_ATTR_SIZE, (void *)attrs,
-			BENCH_HSM_ATTR_MAX, bench_hsm_attr_policy) < 0) {
+	if (genlmsg_parse(rhdr, 0, (void *)attrs, BENCH_HSM_ATTR_MAX,
+			  bench_hsm_attr_policy) < 0) {
 		fprintf(stderr, "parsing failed\n");
 		return;
 	}
@@ -159,7 +182,7 @@ hsm_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
 }
 
 /**
- * recv_single_msg - Receive a signle message.
+ * recv_single_msg - Receive a single message.
  * @param socket Generic netlink socket.
  */
 int recv_single_msg(struct nl_sock *socket)
