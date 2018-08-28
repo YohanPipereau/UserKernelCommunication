@@ -30,17 +30,25 @@ static void test1(struct nl_sock *socket, int family_id)
 /* test2 - Send IOC request and check that transaction is handled correctly */
 static void test2(struct nl_sock *socket, int family_id)
 {
-	int rc;
 	struct ioc_example_struct {
 		int	example_int;
 		short	example_short;
-	} ex_struct = { 1, 2};
+	};
+	int rc;
+	struct ioc_example_struct *ex_struct;
+
+	ex_struct = malloc(sizeof(struct ioc_example_struct));
+	if (!ex_struct)
+		return;
+	ex_struct->example_int = 1;
+	ex_struct->example_short = 2;
 
 	rc = ioc_transact(socket, family_id, IOC_REQUEST_EXAMPLE, &ex_struct,
 			  sizeof(ex_struct));
 	if (rc < 0)
 		return;
 
+	free(ex_struct);
 	assert(rc == 0);
 }
 
@@ -65,7 +73,7 @@ int main()
 		return family_id;
 	};
 
-	//test1(socket, family_id);
+	test1(socket, family_id);
 	test2(socket, family_id);
 
 	genl_close_socket(socket);

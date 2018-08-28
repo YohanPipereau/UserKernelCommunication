@@ -22,6 +22,25 @@
 
 #define DEFAULT_MSG_LEN		1024
 
+/* nla_policy structures defer between user space and kernel space */
+
+/* attribute policy for IOC command */
+static struct nla_policy bench_ioc_attr_policy[BENCH_IOC_ATTR_MAX + 1] = {
+	[IOC_REQUEST]	=	{.type = NLA_U32},
+};
+#define BENCH_IOC_ATTR_SIZE nla_total_size(nla_attr_size(sizeof(uint32_t)))
+
+/* attribute policy for HSM command */
+static struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
+	[HSM_MAGIC]		=	{.type = NLA_U16},
+	[HSM_TRANSPORT]		= 	{.type = NLA_U8},
+	[HSM_FLAGS]		= 	{.type = NLA_U8},
+	[HSM_MSGTYPE]		= 	{.type = NLA_U16},
+	[HSM_MSGLEN]		=	{.type = NLA_U16},
+};
+#define BENCH_HSM_ATTR_SIZE nla_total_size(3*nla_attr_size(sizeof(uint16_t)) \
+					   + 2*nla_attr_size(sizeof(uint8_t)))
+
 /**
  * ioc_transact - Send a IOC request on a Netlink socket and wait for kernel
  * response.
@@ -42,12 +61,9 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 	if (!msg)
 		return -ENOMEM;
 
-	payload = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id,
+	genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id,
 			      0, 0, BENCH_CMD_IOC, BENCH_GENL_VERSION);
-	if (!payload)
-		goto out_send_failure;
 
-	printf("before nla_put_u32: nlmsg_len %d\n", nlmsg_hdr(msg)->nlmsg_len);
 	/* Enter IOC Request code */
 	rc = nla_put_u32(msg, IOC_REQUEST, req);
 	if (rc < 0)
@@ -55,8 +71,6 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 
 	fprintf(stderr, "[len=%d, seq=%d] Sent\n", nlmsg_hdr(msg)->nlmsg_len,
 	       nlmsg_hdr(msg)->nlmsg_seq);
-
-	printf("after nla_put_u32: nlmsg_len %d\n", nlmsg_hdr(msg)->nlmsg_len);
 
 	rc = nl_send_auto(socket, msg);
 	if (rc < 0)
@@ -136,13 +150,21 @@ ioc_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
 {
 	struct nlattr *attrs[BENCH_IOC_ATTR_MAX];
 
-	if (nlmsg_parse(rhdr, BENCH_IOC_ATTR_SIZE, (void *)attrs,
-			BENCH_IOC_ATTR_MAX, bench_ioc_attr_policy) < 0) {
-		fprintf(stderr, "parsing failed\n");
+	attrs[IOC_REQUEST] = malloc(sizeof(struct nlattr));
+	if (!attrs[IOC_REQUEST])
 		return;
+
+	if (genlmsg_parse(rhdr, 0, (void *)attrs, BENCH_IOC_ATTR_MAX,
+			  bench_ioc_attr_policy) < 0) {
+		fprintf(stderr, "parsing failed\n");
+		goto out;
 	}
 	fprintf(stderr,"[len=%d,type=%d,flags=%d,seq=%d] %s\n", len,
 		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq, msg);
+
+out:
+	free(attrs[IOC_REQUEST]);
+	return;
 }
 
 static void
@@ -150,8 +172,8 @@ hsm_display_message(struct nlmsghdr *rhdr, unsigned char *msg, int len)
 {
 	struct nlattr *attrs[BENCH_HSM_ATTR_MAX];
 
-	if (nlmsg_parse(rhdr, BENCH_HSM_ATTR_SIZE, (void *)attrs,
-			BENCH_HSM_ATTR_MAX, bench_hsm_attr_policy) < 0) {
+	if (genlmsg_parse(rhdr, 0, (void *)attrs, BENCH_HSM_ATTR_MAX,
+			  bench_hsm_attr_policy) < 0) {
 		fprintf(stderr, "parsing failed\n");
 		return;
 	}

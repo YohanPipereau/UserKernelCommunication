@@ -1,8 +1,8 @@
 CC = gcc
 BIN = benchclient
 PWD = $(shell pwd)
-LDFLAGS = -lnl-3 -lnl-genl-3
-CFLAGS = -I/usr/include/libnl3 -I$(PWD)/.. -Wall
+LDFLAGS = -lnl-3 -lnl-genl-3 -g
+CFLAGS = -I/usr/include/libnl3 -I$(PWD)/.. -Wall -g
 
 all: $(BIN)
 
