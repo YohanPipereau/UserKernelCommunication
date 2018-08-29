@@ -1,9 +1,13 @@
 #include <netlink/netlink.h>
 #include <netlink/genl/genl.h>
 #include <netlink/genl/ctrl.h>
-#include <string.h>
-#include <errno.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <semaphore.h>
+#include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 
 #include "benchclient_internal.h"
@@ -20,7 +24,10 @@
  *
  */
 
+sem_t *sem;
+
 #define DEFAULT_MSG_LEN		1024
+#define BENCH_SEM_NAME 		"bench_sem"
 
 /* nla_policy structures defer between user space and kernel space */
 /* attribute policy for STATS command */
@@ -44,7 +51,7 @@ static struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
 	[HSM_MSGLEN]		=	{.type = NLA_U16},
 };
 
-	static struct nlattr**
+static struct nlattr**
 bench_parse(struct nlmsghdr *rhdr, int cmd_max_attr, struct nla_policy* policy)
 {
 	struct nlattr **attrs;
@@ -215,6 +222,8 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 	struct nl_msg *msg;
 	int rc;
 
+	sem_wait(sem);
+
 	msg = __transact_alloc(socket, family_id, BENCH_CMD_IOC);
 	if (!msg)
 		return -ENOMEM;
@@ -227,7 +236,11 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	return __ack_transact(socket, msg);
+	rc = __ack_transact(socket, msg);
+
+	sem_post(sem);
+
+	return rc;
 }
 
 /**
@@ -243,6 +256,8 @@ int stats_transact(struct nl_sock *socket, const int family_id,
 	struct nl_msg *msg;
 	int rc;
 
+	sem_wait(sem);
+
 	msg = __transact_alloc(socket, family_id, BENCH_CMD_STATS);
 	if (!msg)
 		return -ENOMEM;
@@ -255,7 +270,12 @@ int stats_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	return __ans_transact(socket, msg);
+	rc = __ans_transact(socket, msg);
+
+	sleep(5);
+	sem_post(sem);
+
+	return rc;
 }
 
 /**
@@ -375,8 +395,32 @@ out:
 /**
  * genl_close_socket - Close generic netlink socket.
  */
-void genl_close_socket(struct nl_sock *socket)
+void bench_close_socket(struct nl_sock *socket)
 {
+	sem_unlink(BENCH_SEM_NAME);
+	sem_close(sem);
 	nl_close(socket);
 	nl_socket_free(socket);
+}
+
+/**
+ * genl_create_socket - Create generic netlink socket.
+ */
+struct nl_sock * bench_create_socket()
+{
+	struct nl_sock *socket;
+	int rc;
+
+	sem = sem_open(BENCH_SEM_NAME, O_CREAT, O_RDWR, 1);
+
+	/* Open socket to kernel */
+	socket = nl_socket_alloc();
+	rc = genl_connect(socket);
+	if (rc < 0) {
+		fprintf(stderr, "Fail connecting : %s\n", strerror(-rc));
+		bench_close_socket(socket);
+		return NULL;
+	}
+
+	return socket;
 }
