@@ -4,10 +4,20 @@
 
 /* * * * * * Lustre policies enumeration * * * * */
 
+/* Configuration policy attributes, used for STATS */
+enum {
+	STATS_UNSPEC, /* Needed : Kernel don't parse type 0 */
+	STATS_REQUEST,
+	STATS_RAW,
+	__BENCH_STATS_ATTR_MAX,
+};
+#define BENCH_STATS_ATTR_MAX (__BENCH_STATS_ATTR_MAX - 1)
+
 /* Configuration policy attributes, used for IOC */
 enum {
 	IOC_UNSPEC, /* Needed : Kernel don't parse type 0 */
 	IOC_REQUEST,
+	IOC_RAW,
 	__BENCH_IOC_ATTR_MAX,
 };
 #define BENCH_IOC_ATTR_MAX (__BENCH_IOC_ATTR_MAX - 1)
@@ -38,3 +48,7 @@ enum {
 /* * * * * * IOC REQUEST codes * * * * */
 
 #define IOC_REQUEST_EXAMPLE	1
+
+/* * * * * * STATS REQUEST codes * * * * */
+
+#define STATS_REQUEST_EXAMPLE	1

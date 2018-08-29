@@ -52,6 +52,30 @@ static void test2(struct nl_sock *socket, int family_id)
 	assert(rc == 0);
 }
 
+/* test3 - Send STATS request and check that transaction is handled correctly */
+static void test3(struct nl_sock *socket, const int family_id)
+{
+	struct ioc_example_struct {
+		int	example_int;
+		short	example_short;
+	};
+	int rc;
+	struct ioc_example_struct *ex_struct;
+
+	ex_struct = malloc(sizeof(struct ioc_example_struct));
+	if (!ex_struct)
+		return;
+	ex_struct->example_int = 1;
+	ex_struct->example_short = 2;
+
+	rc = stats_transact(socket, family_id, STATS_REQUEST_EXAMPLE,
+			    &ex_struct, sizeof(ex_struct));
+	if (rc < 0)
+		return;
+
+	assert(rc == 0);
+}
+
 int main()
 {
 	struct nl_sock *socket;
@@ -73,8 +97,12 @@ int main()
 		return family_id;
 	};
 
+	printf("** Test1 **\n");
 	test1(socket, family_id);
+	printf("** Test2 **\n");
 	test2(socket, family_id);
+	printf("** Test3 **\n");
+	test3(socket, family_id);
 
 	genl_close_socket(socket);
 

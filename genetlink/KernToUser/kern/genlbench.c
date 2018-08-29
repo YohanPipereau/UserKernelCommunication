@@ -23,9 +23,12 @@
  * 	Transactions implement lost cases by repeating a transaction multiple
  * 	time until it succeed.
  *
- *   2. Dumps. A dump asks
+ *   2. Dumps. If data sent from kernel is bigger than socket buffer size,
+ * 	a dump is performed, it divides the original message in smaller chunk
+ * 	to be sent sequentially.
  *
- *   3. Multicast subscriptions.
+ *   3. Multicast subscriptions. Subscribe to a multicast group which sends you
+ *   	messages.
  *
  *   4. Unicast subscriptions.
  *
@@ -49,9 +52,16 @@
 
 /* nla_policy structures defer between user space and kernel space */
 
+/* attribute policy for STATS command */
+static const struct nla_policy bench_stats_attr_policy[BENCH_STATS_ATTR_MAX + 1] = {
+	[STATS_REQUEST]	=	{.type = NLA_U32},
+	[STATS_RAW]	=	{.type = NLA_BINARY},
+};
+
 /* attribute policy for IOC command */
 static const struct nla_policy bench_ioc_attr_policy[BENCH_IOC_ATTR_MAX + 1] = {
 	[IOC_REQUEST]	=	{.type = NLA_U32},
+	[IOC_RAW]	=	{.type = NLA_BINARY},
 };
 /* Add padding after IOC_REQUEST to separate from next message */
 #define BENCH_IOC_ATTR_SIZE nla_total_size(nla_attr_size(sizeof(u32)))
@@ -74,6 +84,27 @@ static const struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
  */
 static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
 {
+	unsigned int reqc; /* request code */
+
+	printk(KERN_DEBUG "[len=%d,type=%d,seq=%d]\n",
+	       info->nlhdr->nlmsg_len, info->nlhdr->nlmsg_type, info->snd_seq);
+
+	/* Get request code */
+	if (!info->attrs[STATS_REQUEST]) {
+		printk(KERN_ERR "STATS_REQUEST attribute empty\n");
+		return -EINVAL;
+	}
+	reqc = nla_get_u32(info->attrs[BENCH_CMD_IOC]);
+
+	switch(reqc) {
+	case STATS_REQUEST_EXAMPLE:
+		printk(KERN_DEBUG "genlbench: STATS_REQUEST_EXAMPLE\n");
+		break;
+	default:
+		printk(KERN_ERR "genlbench: Unsupported Request %d\n", reqc);
+		return -EOPNOTSUPP;
+	}
+
 	return 0;
 }
 
@@ -86,10 +117,10 @@ static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
 {
 	unsigned int reqc; /* request code */
 
-	/* Get request code */
 	printk(KERN_DEBUG "[len=%d,type=%d,seq=%d]\n",
 	       info->nlhdr->nlmsg_len, info->nlhdr->nlmsg_type, info->snd_seq);
 
+	/* Get request code */
 	if (!info->attrs[IOC_REQUEST]) {
 		printk(KERN_ERR "IOC_REQUEST attribute empty\n");
 		return -EINVAL;
@@ -98,7 +129,7 @@ static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
 
 	switch(reqc) {
 	case IOC_REQUEST_EXAMPLE:
-		printk(KERN_DEBUG "genlbench: IOC REQUEST received\n");
+		printk(KERN_DEBUG "genlbench: IOC_REQUEST_EXAMPLE\n");
 		break;
 	default:
 		printk(KERN_ERR "genlbench: Unsupported Request %d\n", reqc);
@@ -131,7 +162,7 @@ static struct genl_ops bench_genl_ops[] = {
 	{
 		.cmd = BENCH_CMD_HSM,
 		.policy = bench_hsm_attr_policy,
-		.doit = genlbench_hsm_recv,
+		.doit = genlbench_hsm_recv, //mandatory
 		.dumpit = NULL, //TODO
 	},
 };
