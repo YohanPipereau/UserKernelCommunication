@@ -16,7 +16,7 @@
  *   every message sent.
  *
  * Receiving:
- *   We determine which message has been received in recv_single_msg.
+ *   We determine which message has been received in recv_single_esg.
  *
  */
 
@@ -60,8 +60,10 @@ __transact_alloc(struct nl_sock *socket, const int family_id, const int cmd)
 	if (!msg)
 		return NULL;
 
-	genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id, 0, 0, cmd,
-		    BENCH_GENL_VERSION);
+	if (!genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id, 0, 0, cmd,
+		    BENCH_GENL_VERSION)) {
+		nlmsg_free(msg);
+	}
 
 	return msg;
 }
@@ -91,6 +93,8 @@ __transact(struct nl_sock *socket, struct nl_msg *msg)
 		fprintf(stderr, "Error reported on reception : %d\n", rc);
 		return rc;
 	}
+
+	nlmsg_free(msg);
 
 	return rc;
 }
@@ -185,12 +189,14 @@ int hsm_send_msg(struct nl_sock *socket, int family_id)
 	if (rc < 0)
 		goto out_failure;
 
+	nlmsg_free(msg);
+
 	return rc;
 
 out_failure:
 	fprintf(stderr, "fail sending message");
 	nlmsg_free(msg);
-	return -ENOMEM; //TODO : right error code?
+	return -EINVAL;
 }
 
 static struct nlattr**
@@ -275,16 +281,8 @@ int recv_single_msg(struct nl_sock *socket)
 		goto out_failure;
 	}
 
-	//TODO : change this. We want to read message size first then allocate
-	//accordingly.
-	buf = malloc(DEFAULT_MSG_LEN);
-	if (!buf) {
-		rc = errno;
-		goto out_failure;
-	}
-
 retry:
-	rc = nl_recv(socket, nla, &buf, NULL);
+	rc = nl_recv(socket, nla, &buf, NULL); /*  allocate buf */
 	if (rc == -ENOBUFS) //typically return ENOBUF
 		goto retry;
 	else if (rc < 0)
@@ -304,8 +302,9 @@ retry:
 
 	if (rhdr->nlmsg_type == NLMSG_ERROR) {
 		e = nlmsg_data(rhdr);
+		rc = e->error;
 		display_error_message(rhdr, e, rc);
-		return e->error; //error code
+		goto out;
 	}
 
 	genlhdr = genlmsg_hdr(rhdr);
@@ -325,10 +324,7 @@ retry:
 		goto out_failure;
 	}
 
-	free(nla);
-	free(buf);
-
-	return rc;
+	goto out;
 
 out_failure:
 	perror("receiving message failed");
@@ -344,4 +340,5 @@ out:
 void genl_close_socket(struct nl_sock *socket)
 {
 	nl_close(socket);
+	nl_socket_free(socket);
 }

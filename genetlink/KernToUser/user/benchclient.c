@@ -73,6 +73,7 @@ static void test3(struct nl_sock *socket, const int family_id)
 	if (rc < 0)
 		return;
 
+	free(ex_struct);
 	assert(rc == 0);
 }
 
@@ -87,6 +88,7 @@ int main()
 	rc = genl_connect(socket);
 	if (rc < 0) {
 		fprintf(stderr, "Fail connecting : %s\n", strerror(-rc));
+		genl_close_socket(socket);
 		return rc;
 	}
 
@@ -94,6 +96,7 @@ int main()
 	if (family_id < 0) {
 		fprintf(stderr, "Fail resolving module : %s\n",
 			strerror(-family_id));
+		genl_close_socket(socket);
 		return family_id;
 	};
 
