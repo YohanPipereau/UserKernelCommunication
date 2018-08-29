@@ -52,3 +52,8 @@ enum {
 /* * * * * * STATS REQUEST codes * * * * */
 
 #define STATS_REQUEST_EXAMPLE	1
+
+struct ioc_example_struct {
+	int	example_int;
+	short	example_short;
+};

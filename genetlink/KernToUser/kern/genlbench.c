@@ -105,6 +105,8 @@ static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
 		return -EOPNOTSUPP;
 	}
 
+	/* reply to the message */
+
 	return 0;
 }
 
@@ -136,7 +138,7 @@ static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
 		return -EOPNOTSUPP;
 	}
 
-	return 0;
+	return 0; /* send back NLMSG_ERR */
 }
 
 /** genlbench_hsm_recv - Operation not supported. HSM request must only be
@@ -250,7 +252,6 @@ static int __init genlbench_init(void)
 
 	return 0;
 }
-
 
 static void __exit genlbench_exit(void)
 {

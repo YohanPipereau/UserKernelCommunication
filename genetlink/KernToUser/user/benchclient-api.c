@@ -44,6 +44,78 @@ static struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
 	[HSM_MSGLEN]		=	{.type = NLA_U16},
 };
 
+	static struct nlattr**
+bench_parse(struct nlmsghdr *rhdr, int cmd_max_attr, struct nla_policy* policy)
+{
+	struct nlattr **attrs;
+	int rc;
+
+	attrs = malloc(sizeof(struct nlattr)*cmd_max_attr);
+	if(!attrs)
+		return NULL;
+
+	rc = genlmsg_parse(rhdr, 0, (void *)attrs, cmd_max_attr, policy);
+	if (rc < 0) {
+		fprintf(stderr, "parsing failed\n");
+		free(attrs);
+		attrs = NULL;
+	}
+
+	return attrs;
+}
+
+static inline void
+display_sent_message(struct nlmsghdr *rhdr)
+{
+	fprintf(stderr,"SENT: [len=%d,type=%d,flags=%d,seq=%d]\n",
+		rhdr->nlmsg_len, rhdr->nlmsg_type, rhdr->nlmsg_flags,
+		rhdr->nlmsg_seq);
+}
+
+static inline void
+display_ack_message(struct nlmsghdr *rhdr, int err)
+{
+	fprintf(stderr,"HDR: [len=%d,type=%d,flags=%d,seq=%d]\n",
+		rhdr->nlmsg_len, rhdr->nlmsg_type, rhdr->nlmsg_flags,
+		rhdr->nlmsg_seq);
+	fprintf(stderr,"ACK PAY: [error=%s]\n", strerror(-err));
+}
+
+static void
+stats_display_message(struct nlmsghdr *rhdr, int len)
+{
+	struct nlattr **attrs;
+
+	attrs = bench_parse(rhdr, BENCH_STATS_ATTR_MAX,
+			    bench_stats_attr_policy);
+	if (!attrs)
+		goto out;
+
+	fprintf(stderr,"HDR: [len=%d,type=%d,flags=%d,seq=%d]\n", len,
+		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq);
+	fprintf(stderr,"MSG: []\n");
+
+out:
+	free(attrs);
+}
+
+static void
+hsm_display_message(struct nlmsghdr *rhdr, int len)
+{
+	struct nlattr **attrs;
+
+	attrs = bench_parse(rhdr, BENCH_HSM_ATTR_MAX, bench_hsm_attr_policy);
+	if (!attrs)
+		goto out;
+
+	fprintf(stderr,"HDR : [len=%d,type=%d,flags=%d,seq=%d]\n", len,
+		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq);
+	fprintf(stderr,"MSG : []");
+
+out:
+	free(attrs);
+}
+
 /**
  * __transact_alloc - Allocate message for transaction.
  * @param socket Generic netlink socket.
@@ -69,24 +141,53 @@ __transact_alloc(struct nl_sock *socket, const int family_id, const int cmd)
 }
 
 /**
- * __transact - Send request to Kernel and wait for response.
- * response.
+ * __ans_transact - Send request to Kernel and wait for kernel family answer.
  * @param socket Generic netlink socket.
  * @param msg Message to be sent.
  */
 static int
-__transact(struct nl_sock *socket, struct nl_msg *msg)
+__ans_transact(struct nl_sock *socket, struct nl_msg *msg)
 {
 	int rc;
-
-	fprintf(stderr, "SENT: [len=%d]\n", nlmsg_hdr(msg)->nlmsg_len);
 
 	rc = nl_send_auto(socket, msg);
 	if (rc < 0) {
 		fprintf(stderr, "fail sending message\n");
 		nlmsg_free(msg);
-		return -ENOMEM; //TODO : right error code?
+		return rc;
 	}
+
+	display_sent_message(nlmsg_hdr(msg));
+
+	rc = recv_single_msg(socket);
+	if (rc < 0) {
+		fprintf(stderr, "Error reported on reception : %d\n", rc);
+		return rc;
+	}
+
+	nlmsg_free(msg);
+
+	return rc;
+}
+
+/**
+ * __ack_transact - Send request to Kernel and wait for NLMSG_ERR response.
+ * @param socket Generic netlink socket.
+ * @param msg Message to be sent.
+ */
+static int
+__ack_transact(struct nl_sock *socket, struct nl_msg *msg)
+{
+	int rc;
+
+	rc = nl_send_auto(socket, msg);
+	if (rc < 0) {
+		fprintf(stderr, "fail sending message\n");
+		nlmsg_free(msg);
+		return rc;
+	}
+
+	display_sent_message(nlmsg_hdr(msg));
 
 	rc = recv_single_msg(socket);
 	if (rc < 0) {
@@ -126,7 +227,7 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	return __transact(socket, msg);
+	return __ack_transact(socket, msg);
 }
 
 /**
@@ -135,11 +236,9 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
  * @param socket Generic netlink socket.
  * @param family_id ID of Generic netlink family.
  * @param req STATS request code.
- * @param payload Data you want to send to the kernel.
- * @param len Length of the payload provided.
  */
 int stats_transact(struct nl_sock *socket, const int family_id,
-		   const unsigned int req, void *payload, int len)
+		   const unsigned int req)
 {
 	struct nl_msg *msg;
 	int rc;
@@ -156,7 +255,7 @@ int stats_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	return __transact(socket, msg);
+	return __ans_transact(socket, msg);
 }
 
 /**
@@ -189,6 +288,8 @@ int hsm_send_msg(struct nl_sock *socket, int family_id)
 	if (rc < 0)
 		goto out_failure;
 
+	display_sent_message(nlmsg_hdr(msg));
+
 	nlmsg_free(msg);
 
 	return rc;
@@ -197,69 +298,6 @@ out_failure:
 	fprintf(stderr, "fail sending message");
 	nlmsg_free(msg);
 	return -EINVAL;
-}
-
-static struct nlattr**
-bench_parse(struct nlmsghdr *rhdr, int cmd_max_attr, struct nla_policy* policy)
-{
-	struct nlattr **attrs;
-	int rc;
-
-	attrs = malloc(sizeof(struct nlattr)*cmd_max_attr);
-	if(!attrs)
-		return NULL;
-
-	rc = genlmsg_parse(rhdr, 0, (void *)attrs, cmd_max_attr, policy);
-	if (rc < 0) {
-		fprintf(stderr, "parsing failed\n");
-		free(attrs);
-		attrs = NULL;
-	}
-
-	return attrs;
-}
-
-static inline void
-display_error_message(struct nlmsghdr *rhdr, struct nlmsgerr *e, int len)
-{
-	fprintf(stderr,"HDR : [len=%d,type=%d,flags=%d,seq=%d]\n", len,
-		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq);
-	fprintf(stderr,"ERR MSG : [error=%s]\n", strerror(-e->error));
-}
-
-static void
-stats_display_message(struct nlmsghdr *rhdr, int len)
-{
-	struct nlattr **attrs;
-
-	attrs = bench_parse(rhdr, BENCH_STATS_ATTR_MAX,
-			    bench_stats_attr_policy);
-	if (!attrs)
-		goto out;
-
-	fprintf(stderr,"HDR : [len=%d,type=%d,flags=%d,seq=%d]\n", len,
-		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq);
-	fprintf(stderr,"MSG : []\n");
-
-out:
-	free(attrs);
-}
-
-static void
-hsm_display_message(struct nlmsghdr *rhdr, int len)
-{
-	struct nlattr **attrs;
-
-	attrs = bench_parse(rhdr, BENCH_HSM_ATTR_MAX, bench_hsm_attr_policy);
-	if (!attrs)
-		goto out;
-
-	fprintf(stderr,"HDR : [len=%d,type=%d,flags=%d,seq=%d]\n", len,
-		rhdr->nlmsg_type, rhdr->nlmsg_flags, rhdr->nlmsg_seq);
-	fprintf(stderr,"MSG : []");
-
-out:
-	free(attrs);
 }
 
 /**
@@ -303,7 +341,7 @@ retry:
 	if (rhdr->nlmsg_type == NLMSG_ERROR) {
 		e = nlmsg_data(rhdr);
 		rc = e->error;
-		display_error_message(rhdr, e, rc);
+		display_ack_message(rhdr, rc);
 		goto out;
 	}
 
