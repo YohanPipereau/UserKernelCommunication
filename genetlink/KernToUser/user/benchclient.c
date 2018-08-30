@@ -118,21 +118,21 @@ int main()
 		return family_id;
 	};
 
-	printf("** Test1 **\n");
+	printf("** Test1: Unsupported HSM request **\n");
 	test1(socket, family_id);
-	printf("Test1: OK\n");
-	printf("** Test2 **\n");
+	printf("Test1: OK\n\n");
+	printf("** Test2: Test simple IOC request **\n");
 	test2(socket, family_id);
-	printf("Test2: OK\n");
-	printf("** Test3 **\n");
+	printf("Test2: OK\n\n");
+	printf("** Test3: Test simple STATS request **\n");
 	test3(socket, family_id);
-	printf("Test3: OK\n");
-	printf("** Test4 **\n");
+	printf("Test3: OK\n\n");
+	printf("** Test4: Send multiple STATS messages **\n");
 	//test4(socket, family_id);
-	printf("Test4: OK\n");
-	printf("** Test5 **\n");
+	printf("Test4: OK\n\n");
+	printf("** Test5: Multi processus message sending **\n");
 	test5(socket, family_id);
-	printf("Test5: OK\n");
+	printf("Test5: OK\n\n");
 
 	bench_close_socket(socket);
 

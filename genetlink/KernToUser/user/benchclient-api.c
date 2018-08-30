@@ -3,7 +3,6 @@
 #include <netlink/genl/ctrl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <semaphore.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
@@ -20,14 +19,11 @@
  *   every message sent.
  *
  * Receiving:
- *   We determine which message has been received in recv_single_esg.
+ *   We determine which message has been received in recv_single_msg.
  *
  */
 
-sem_t *sem;
-
 #define DEFAULT_MSG_LEN		1024
-#define BENCH_SEM_NAME 		"bench_sem"
 
 /* nla_policy structures defer between user space and kernel space */
 /* attribute policy for STATS command */
@@ -124,13 +120,13 @@ out:
 }
 
 /**
- * __transact_alloc - Allocate message for transaction.
+ * __bench_msg_alloc - Allocate message for transaction.
  * @param socket Generic netlink socket.
  * @param family_id ID of Generic netlink family.
  * @param
  */
 static struct nl_msg *
-__transact_alloc(struct nl_sock *socket, const int family_id, const int cmd)
+__bench_msg_alloc(struct nl_sock *socket, const int family_id, const int cmd)
 {
 	struct nl_msg *msg;
 
@@ -142,6 +138,7 @@ __transact_alloc(struct nl_sock *socket, const int family_id, const int cmd)
 	if (!genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id, 0, 0, cmd,
 		    BENCH_GENL_VERSION)) {
 		nlmsg_free(msg);
+		return NULL;
 	}
 
 	return msg;
@@ -167,10 +164,8 @@ __ans_transact(struct nl_sock *socket, struct nl_msg *msg)
 	display_sent_message(nlmsg_hdr(msg));
 
 	rc = recv_single_msg(socket);
-	if (rc < 0) {
+	if (rc < 0)
 		fprintf(stderr, "Error reported on reception : %d\n", rc);
-		return rc;
-	}
 
 	nlmsg_free(msg);
 
@@ -197,10 +192,8 @@ __ack_transact(struct nl_sock *socket, struct nl_msg *msg)
 	display_sent_message(nlmsg_hdr(msg));
 
 	rc = recv_single_msg(socket);
-	if (rc < 0) {
+	if (rc < 0)
 		fprintf(stderr, "Error reported on reception : %d\n", rc);
-		return rc;
-	}
 
 	nlmsg_free(msg);
 
@@ -222,9 +215,7 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 	struct nl_msg *msg;
 	int rc;
 
-	sem_wait(sem);
-
-	msg = __transact_alloc(socket, family_id, BENCH_CMD_IOC);
+	msg = __bench_msg_alloc(socket, family_id, BENCH_CMD_IOC);
 	if (!msg)
 		return -ENOMEM;
 
@@ -236,11 +227,7 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	rc = __ack_transact(socket, msg);
-
-	sem_post(sem);
-
-	return rc;
+	return __ack_transact(socket, msg);
 }
 
 /**
@@ -256,9 +243,7 @@ int stats_transact(struct nl_sock *socket, const int family_id,
 	struct nl_msg *msg;
 	int rc;
 
-	sem_wait(sem);
-
-	msg = __transact_alloc(socket, family_id, BENCH_CMD_STATS);
+	msg = __bench_msg_alloc(socket, family_id, BENCH_CMD_STATS);
 	if (!msg)
 		return -ENOMEM;
 
@@ -270,12 +255,7 @@ int stats_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	rc = __ans_transact(socket, msg);
-
-	sleep(5);
-	sem_post(sem);
-
-	return rc;
+	return __ans_transact(socket, msg);
 }
 
 /**
@@ -286,38 +266,21 @@ int stats_transact(struct nl_sock *socket, const int family_id,
 int hsm_send_msg(struct nl_sock *socket, int family_id)
 {
 	struct nl_msg *msg;
-	void *payload;
 	int rc;
 
-	//TODO : This allocate PAGESIZE Bytes. Allocate for required length
-	msg = nlmsg_alloc();
+	msg = __bench_msg_alloc(socket, family_id, BENCH_CMD_HSM);
 	if (!msg)
 		return -ENOMEM;
 
-	payload = genlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, family_id,
-			      0, 0, BENCH_CMD_HSM, BENCH_GENL_VERSION);
-	if (!payload)
-		goto out_failure;
-
 	/* Only one HSM attribute used to test */
 	rc = nla_put_u16(msg, HSM_MAGIC, 10);
-	if (rc < 0)
-		goto out_failure;
+	if (rc < 0) {
+		fprintf(stderr, "HSM attribute error");
+		nlmsg_free(msg);
+		return -EINVAL;
+	}
 
-	rc = nl_send_auto(socket, msg);
-	if (rc < 0)
-		goto out_failure;
-
-	display_sent_message(nlmsg_hdr(msg));
-
-	nlmsg_free(msg);
-
-	return rc;
-
-out_failure:
-	fprintf(stderr, "fail sending message");
-	nlmsg_free(msg);
-	return -EINVAL;
+	return __ack_transact(socket, msg);
 }
 
 /**
@@ -397,10 +360,9 @@ out:
  */
 void bench_close_socket(struct nl_sock *socket)
 {
-	sem_unlink(BENCH_SEM_NAME);
-	sem_close(sem);
 	nl_close(socket);
 	nl_socket_free(socket);
+	socket = NULL;
 }
 
 /**
@@ -410,8 +372,6 @@ struct nl_sock * bench_create_socket()
 {
 	struct nl_sock *socket;
 	int rc;
-
-	sem = sem_open(BENCH_SEM_NAME, O_CREAT, O_RDWR, 1);
 
 	/* Open socket to kernel */
 	socket = nl_socket_alloc();
