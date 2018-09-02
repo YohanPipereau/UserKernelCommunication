@@ -3,7 +3,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
-#include "genlbench_internal.h"
+#include "genlbench.h"
 
 /*
  * This implementation is based on generic netlink.
@@ -49,6 +49,8 @@
  *   drivers/block/nbd.c
  *   openvswitch netlink API
  */
+
+LIST_HEAD(member_list); /* Initialize member list */
 
 /* nla_policy structures defer between user space and kernel space */
 
@@ -105,9 +107,7 @@ static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
 		return -EOPNOTSUPP;
 	}
 
-	/* reply to the message */
-
-	return 0;
+	return 0; /* reply to the message */
 }
 
 /**
@@ -236,7 +236,34 @@ msg_build_fail:
 	nlmsg_free(skb);
 	return -ENOMEM;
 }
-EXPORT_SYMBOL(genlbench_hsm_unicast);
+
+/**
+ * genlbench_register - Register a member in the member list.
+ * @param member : TODO
+ */
+int genlbench_register(struct genlbench_member *member)
+{
+	printk(KERN_DEBUG "genlbench : register member\n");
+
+	list_add(&member->list, &member_list);
+
+	return 0;
+}
+EXPORT_SYMBOL(genlbench_register);
+
+/**
+ * genlbench_unregister - Unregister a member from the member list.
+ * @param member : TODO
+ */
+int genlbench_unregister(struct genlbench_member *member)
+{
+	printk(KERN_DEBUG "genlbench : unregister member\n");
+
+	list_del(&member->list);
+
+	return 0;
+}
+EXPORT_SYMBOL(genlbench_unregister);
 
 static int __init genlbench_init(void)
 {
@@ -244,6 +271,7 @@ static int __init genlbench_init(void)
 
 	printk(KERN_INFO "genlbench: module loaded\n");
 
+	/* Register generic netlink family */
 	rc = genl_register_family(&bench_genl_family);
 	if (rc != 0) {
 		printk(KERN_ERR "failed to register bench family\n");
@@ -264,5 +292,5 @@ module_init(genlbench_init);
 module_exit(genlbench_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("User-Kernel communication with genetlink");
+MODULE_DESCRIPTION("Bench Generic netlink User-Kernel communication");
 MODULE_AUTHOR("YohanPipereau");
