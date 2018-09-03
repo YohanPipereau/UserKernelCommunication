@@ -87,6 +87,7 @@ static const struct nla_policy bench_hsm_attr_policy[BENCH_HSM_ATTR_MAX + 1] = {
 static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
 {
 	unsigned int reqc; /* request code */
+	struct genlbench_member *member;
 
 	printk(KERN_DEBUG "[len=%d,type=%d,seq=%d]\n",
 	       info->nlhdr->nlmsg_len, info->nlhdr->nlmsg_type, info->snd_seq);
@@ -101,6 +102,12 @@ static int genlbench_stats_transact(struct sk_buff *skb, struct genl_info *info)
 	switch(reqc) {
 	case STATS_REQUEST_EXAMPLE:
 		printk(KERN_DEBUG "genlbench: STATS_REQUEST_EXAMPLE\n");
+		list_for_each_entry(member, &member_list, list) {
+			if (!member->stats_ans->example)
+				printk(KERN_DEBUG "no examplefn\n");
+			else
+				member->stats_ans->example();
+		}
 		break;
 	default:
 		printk(KERN_ERR "genlbench: Unsupported Request %d\n", reqc);
@@ -131,6 +138,7 @@ static int genlbench_ioc_transact(struct sk_buff *skb, struct genl_info *info)
 
 	switch(reqc) {
 	case IOC_REQUEST_EXAMPLE:
+
 		printk(KERN_DEBUG "genlbench: IOC_REQUEST_EXAMPLE\n");
 		break;
 	default:

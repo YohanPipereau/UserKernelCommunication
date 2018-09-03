@@ -13,29 +13,28 @@ static int examplefn(void)
 
 static int __init genlbench_test_init(void)
 {
-	struct genlbench_stats_answers 	*stats_ans;
-	struct genlbench_ioc_operations *ioc_ops;
-
 	printk(KERN_INFO "genlbench_test: Load module\n");
 
 	member = kmalloc(sizeof(*member), GFP_KERNEL);
 	if (!member)
 		return -ENOMEM;
 
-	member->stats_ans = kmalloc(sizeof(*stats_ans), GFP_KERNEL);
+	member->stats_ans = kmalloc(sizeof(struct genlbench_stats_answers),
+				    GFP_KERNEL);
 	if (!member->stats_ans) {
 		kfree(member);
 		return -ENOMEM;
 	}
 
-	member->ioc_ops = kmalloc(sizeof(*ioc_ops), GFP_KERNEL);
+	member->ioc_ops = kmalloc(sizeof(struct genlbench_ioc_operations),
+				  GFP_KERNEL);
 	if (!member->ioc_ops) {
 		kfree(member);
 		kfree(member->stats_ans);
 		return -ENOMEM;
 	}
 
-	stats_ans->example = &examplefn;
+	member->stats_ans->example = &examplefn;
 
 	INIT_LIST_HEAD(&member->list);
 	genlbench_register(member);

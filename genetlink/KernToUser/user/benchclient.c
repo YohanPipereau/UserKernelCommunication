@@ -67,8 +67,9 @@ static void test3(struct nl_sock *socket, const int family_id)
 static void test4(struct nl_sock *socket, const int family_id)
 {
 	int rc;
+	int i;
 
-	for (int i = 0; i < 100; i++) {
+	for (i = 0; i < 100; i++) {
 		rc = stats_transact(socket, family_id, STATS_REQUEST_EXAMPLE);
 		if (rc < 0)
 			return;
