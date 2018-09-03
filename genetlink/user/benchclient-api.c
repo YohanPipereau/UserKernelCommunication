@@ -145,12 +145,12 @@ __bench_msg_alloc(struct nl_sock *socket, const int family_id, const int cmd)
 }
 
 /**
- * __ans_transact - Send request to Kernel and wait for kernel family answer.
+ * ans_transact - Send request to Kernel and wait for kernel family answer.
  * @param socket Generic netlink socket.
  * @param msg Message to be sent.
  */
 static int
-__ans_transact(struct nl_sock *socket, struct nl_msg *msg)
+ans_transact(struct nl_sock *socket, struct nl_msg *msg)
 {
 	int rc;
 
@@ -173,12 +173,12 @@ __ans_transact(struct nl_sock *socket, struct nl_msg *msg)
 }
 
 /**
- * __ack_transact - Send request to Kernel and wait for NLMSG_ERR response.
+ * ack_transact - Send request to Kernel and wait for NLMSG_ERR response.
  * @param socket Generic netlink socket.
  * @param msg Message to be sent.
  */
 static int
-__ack_transact(struct nl_sock *socket, struct nl_msg *msg)
+ack_transact(struct nl_sock *socket, struct nl_msg *msg)
 {
 	int rc;
 
@@ -227,7 +227,7 @@ int ioc_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	return __ack_transact(socket, msg);
+	return ack_transact(socket, msg);
 }
 
 /**
@@ -255,7 +255,7 @@ int stats_transact(struct nl_sock *socket, const int family_id,
 		return -EINVAL;
 	}
 
-	return __ans_transact(socket, msg);
+	return ans_transact(socket, msg);
 }
 
 /**
@@ -280,7 +280,7 @@ int hsm_send_msg(struct nl_sock *socket, int family_id)
 		return -EINVAL;
 	}
 
-	return __ack_transact(socket, msg);
+	return ack_transact(socket, msg);
 }
 
 /**

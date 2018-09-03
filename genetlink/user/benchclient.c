@@ -129,7 +129,7 @@ int main()
 	test3(socket, family_id);
 	printf("Test3: OK\n\n");
 	printf("** Test4: Send multiple STATS messages **\n");
-	//test4(socket, family_id);
+	test4(socket, family_id);
 	printf("Test4: OK\n\n");
 	printf("** Test5: Multi processus message sending **\n");
 	test5(socket, family_id);

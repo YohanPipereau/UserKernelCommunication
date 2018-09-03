@@ -167,13 +167,11 @@ static struct genl_ops bench_genl_ops[] = {
 		.cmd = BENCH_CMD_IOC,
 		.policy = bench_ioc_attr_policy,
 		.doit = genlbench_ioc_transact, //mandatory
-		.dumpit = NULL, //TODO
 	},
 	{
 		.cmd = BENCH_CMD_HSM,
 		.policy = bench_hsm_attr_policy,
 		.doit = genlbench_hsm_recv, //mandatory
-		.dumpit = NULL, //TODO
 	},
 };
 
@@ -247,7 +245,7 @@ msg_build_fail:
 
 /**
  * genlbench_register - Register a member in the member list.
- * @param member : TODO
+ * @param member : member registering to this genetlink API.
  */
 int genlbench_register(struct genlbench_member *member)
 {
@@ -261,7 +259,7 @@ EXPORT_SYMBOL(genlbench_register);
 
 /**
  * genlbench_unregister - Unregister a member from the member list.
- * @param member : TODO
+ * @param member : member unregistering to this genetlink API.
  */
 int genlbench_unregister(struct genlbench_member *member)
 {
