@@ -7,8 +7,9 @@ communications between userland and kernelland.
 Mechanisms were choosen regardless of how 'dirty' they are considered to be.
 (ex : /pipe).
 
-Code to test the following environments is provided:
+The following test environments are provided:
 * Netlink with pre-allocated buffer of fixed size for reception and no resynchronisation (/netlink_simple)
+* Generic Netlink for pseudo-synchronous I/O (transactions), and asynchronous I/O (/genetlink)
 * A character device module with read/write callback (/rwdev)
 * A character device module with mmap callback (/mmapdev)
 * Relay API with debugfs files (/relay)
@@ -34,6 +35,10 @@ KernToUser : First launch user/nlreader then load nlkern module.
 netlink_synchro:
 ----------------
 KernToUser : First launch user/nlreader then load nlkern module.
+
+genetlink:
+----------
+First, load genlbench module, then genlbench_test. Finally, user/benchclient will run tests.
 
 rwdev:
 -------
